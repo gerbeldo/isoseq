@@ -58,7 +58,7 @@ ANNOTATION_GTF_GZ="${GENOME_DIR}/${ANNOTATION_GTF_BASENAME}.gz"
 ANNOTATION_GTF="${GENOME_DIR}/${ANNOTATION_GTF_BASENAME}"
 
 # Primer file for Iso-Seq (standard primers)
-PRIMERS="/home/ubuntu/data/ismb_workshop/primers.fasta"
+PRIMERS="/home/ubuntu/data/ismb_workshop/isoseq_primers.fasta"
 
 # Output directory (will create subdirectory for this sample)
 OUTDIR="isoseq_output/${SAMPLE_NAME}"
