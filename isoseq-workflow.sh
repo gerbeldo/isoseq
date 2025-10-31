@@ -193,18 +193,6 @@ command -v samtools >/dev/null 2>&1 || { echo "ERROR: samtools not found. Instal
 echo "All required tools found."
 echo ""
 
-# Create standard primer file if it doesn't exist
-if [ ! -f "${PRIMERS}" ]; then
-    echo "Creating standard Iso-Seq primer file: ${PRIMERS}"
-    cat > ${PRIMERS} << 'EOF'
->primer_5p
-AAGCAGTGGTATCAACGCAGAGTACATGGGG
->primer_3p
-GTACTCTGCGTTGATACCACTGCTT
-EOF
-    echo "Primer file created."
-    echo ""
-fi
 
 ################################################################################
 # STEP 1: Primer Removal (lima)
@@ -215,13 +203,14 @@ echo "Step 1: Removing primers with lima"
 echo "==================================================================="
 echo "Started at: $(date)"
 
-lima ${HIFI_READS} ${PRIMERS} \
-    ${OUTDIR}/01_primers/${SAMPLE_NAME}.fl.bam \
+lima ${HIFI_READS} \
+    ${PRIMERS} \
+    ${OUTDIR}/01_primers/${SAMPLE_NAME}.fl.bam
     --isoseq \
     --dump-clips \
     --peek-guess \
     --num-threads ${THREADS} \
-    --log-level INFO \
+    --log-level DEBUG \
     --log-file ${OUTDIR}/01_primers/${SAMPLE_NAME}.lima.log
 
 # Get the output BAM file (lima creates primer_5p--primer_3p.bam)
