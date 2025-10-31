@@ -50,7 +50,7 @@ REFERENCE_GENOME_GZ="${GENOME_DIR}/${REFERENCE_GENOME_BASENAME}.gz"
 REFERENCE_GENOME_FA="${GENOME_DIR}/${REFERENCE_GENOME_BASENAME}"
 
 # sorted references
-ANNOTATION_GTF_SORTED="${GENOME_DIR}/gencode.v49.primary_assembly.annotation.gtf"
+ANNOTATION_GTF_SORTED="${GENOME_DIR}/gencode.v49.primary_assembly.annotation.sorted.gtf"
 REFERENCE_GENOME_FAI="${REFERENCE_GENOME_FA}.fai"
 
 # Annotation files (provide both gzipped and uncompressed paths)
