@@ -5,8 +5,8 @@
 # For processing individual samples in parallel
 # Input: Full-length (FL/FLNC) reads BAM generated after primer removal/refine
 #
-# Usage: ./isoseq_pipeline.sh <sample_name> <fl_bam>
-# Example: ./isoseq_pipeline.sh disease_sample disease.refined.fl.bam
+# Usage: ./isoseq_pipeline.sh <sample_name> <fl_bam> <s3_destination>
+# Example: ./isoseq_pipeline.sh disease_sample disease.refined.fl.bam s3://my-bucket/analysis
 ################################################################################
 
 set -e  # Exit on error
@@ -17,24 +17,26 @@ set -o pipefail  # Exit on pipe failure
 # PARSE COMMAND LINE ARGUMENTS
 ################################################################################
 
-if [ $# -ne 2 ]; then
+if [ $# -ne 3 ]; then
     echo "ERROR: Incorrect number of arguments"
     echo ""
-    echo "Usage: $0 <sample_name> <fl_bam>"
+    echo "Usage: $0 <sample_name> <fl_bam> <s3_destination>"
     echo ""
     echo "Arguments:"
     echo "  sample_name      Name for this sample (e.g., 'disease', 'control')"
     echo "  fl_bam           Path to input full-length (FL/FLNC) reads BAM file"
+    echo "  s3_destination   S3 bucket + prefix for results (e.g., s3://bucket/path)"
     echo ""
     echo "Example:"
-    echo "  $0 disease disease_sample.refined.fl.bam"
-    echo "  $0 control control_sample.refined.fl.bam"
+    echo "  $0 disease disease_sample.refined.fl.bam s3://my-bucket/analysis"
+    echo "  $0 control control_sample.refined.fl.bam s3://my-bucket/analysis"
     echo ""
     exit 1
 fi
 
 SAMPLE_NAME="$1"
 FL_BAM="$2"
+S3_DESTINATION="$3"
 
 ################################################################################
 # CONFIGURATION - MODIFY THESE VARIABLES AS NEEDED
@@ -85,6 +87,11 @@ echo ""
 # Check if input file exists
 if [ ! -f "${FL_BAM}" ]; then
     echo "ERROR: Input full-length BAM file not found: ${FL_BAM}"
+    exit 1
+fi
+
+if [[ "${S3_DESTINATION}" != s3://* ]]; then
+    echo "ERROR: S3 destination must start with s3:// (got: ${S3_DESTINATION})"
     exit 1
 fi
 
@@ -172,6 +179,7 @@ echo "Reference genome (pbmm2): ${REFERENCE_GENOME_GZ}"
 echo "Reference genome (pigeon): ${REFERENCE_GENOME_FA}"
 echo "Annotation GTF (gzipped): ${ANNOTATION_GTF_GZ}"
 echo "Annotation GTF (pigeon): ${ANNOTATION_GTF}"
+echo "S3 destination prefix: ${S3_DESTINATION}"
 echo "Threads: ${THREADS}"
 echo "Temporary directory: ${TMPDIR}"
 echo ""
@@ -181,6 +189,7 @@ command -v isoseq >/dev/null 2>&1 || { echo "ERROR: isoseq not found. Install vi
 command -v pbmm2 >/dev/null 2>&1 || { echo "ERROR: pbmm2 not found. Install via: conda install pbmm2"; exit 1; }
 command -v pigeon >/dev/null 2>&1 || { echo "ERROR: pigeon not found. Install via: conda install pbpigeon"; exit 1; }
 command -v samtools >/dev/null 2>&1 || { echo "ERROR: samtools not found. Install via: conda install samtools"; exit 1; }
+command -v aws >/dev/null 2>&1 || { echo "ERROR: aws CLI not found. Install via: https://docs.aws.amazon.com/cli/"; exit 1; }
 
 echo "All required tools found."
 echo ""
@@ -473,6 +482,23 @@ SUMMARY_EOF
 cat ${SUMMARY}
 
 ################################################################################
+# STEP 9: Sync results to S3
+################################################################################
+
+SYNC_TIMESTAMP=$(date -u +%Y%m%dT%H%M%SZ)
+S3_TARGET="${S3_DESTINATION%/}/${SAMPLE_NAME}_${SYNC_TIMESTAMP}"
+
+echo "==================================================================="
+echo "Syncing output directory to S3"
+echo "==================================================================="
+echo "Destination: ${S3_TARGET}"
+
+aws s3 sync "${OUTDIR}" "${S3_TARGET}"
+
+echo "S3 sync completed at: $(date)"
+echo ""
+
+################################################################################
 # COMPLETION
 ################################################################################
 
@@ -485,4 +511,5 @@ echo "Total runtime: $SECONDS seconds"
 echo ""
 echo "Summary saved to: ${SUMMARY}"
 echo "Full log saved to: ${LOGFILE}"
+echo "S3 sync destination: ${S3_TARGET}"
 echo ""
