@@ -156,6 +156,16 @@ echo "==================================================================="
 
 mkdir -p ${OUTDIR}/{01_primers,02_refine,03_cluster,04_mapping,05_collapse,06_classification}
 
+TMP_BASE="${OUTDIR}/tmp"
+mkdir -p "${TMP_BASE}"
+case "${TMP_BASE}" in
+    */) TMPDIR="${TMP_BASE}" ;;
+    *)  TMPDIR="${TMP_BASE}/" ;;
+esac
+export TMPDIR
+export TMP="${TMPDIR}"
+export TEMP="${TMPDIR}"
+
 # Redirect all output to log file while still showing on screen
 exec > >(tee -a ${LOGFILE})
 exec 2>&1
@@ -168,6 +178,7 @@ echo "Reference genome (pigeon): ${REFERENCE_GENOME_FA}"
 echo "Annotation GTF (gzipped): ${ANNOTATION_GTF_GZ}"
 echo "Annotation GTF (pigeon): ${ANNOTATION_GTF}"
 echo "Threads: ${THREADS}"
+echo "Temporary directory: ${TMPDIR}"
 echo ""
 
 # Check if required tools are installed
