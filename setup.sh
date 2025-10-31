@@ -38,7 +38,7 @@ rmdir bin  # Clean up the temporary directory
 
 # Initialize micromamba for current user
 echo "Initializing micromamba..."
-/opt/micromamba/micromamba shell init -s bash -p ~/micromamba
+/opt/micromamba/micromamba shell init -s bash --root-prefix ~/micromamba
 
 # Source the shell configuration to make micromamba available
 export MAMBA_ROOT_PREFIX=~/micromamba
