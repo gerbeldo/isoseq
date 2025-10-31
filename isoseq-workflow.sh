@@ -37,6 +37,8 @@ fi
 SAMPLE_NAME="$1"
 FL_BAM="$2"
 S3_DESTINATION="$3"
+SYNC_TIMESTAMP=$(date -u +%Y%m%dT%H%M%SZ)
+S3_TARGET="${S3_DESTINATION%/}/${SAMPLE_NAME}_${SYNC_TIMESTAMP}"
 
 ################################################################################
 # CONFIGURATION - MODIFY THESE VARIABLES AS NEEDED
@@ -180,6 +182,7 @@ echo "Reference genome (pigeon): ${REFERENCE_GENOME_FA}"
 echo "Annotation GTF (gzipped): ${ANNOTATION_GTF_GZ}"
 echo "Annotation GTF (pigeon): ${ANNOTATION_GTF}"
 echo "S3 destination prefix: ${S3_DESTINATION}"
+echo "S3 sync target: ${S3_TARGET}"
 echo "Threads: ${THREADS}"
 echo "Temporary directory: ${TMPDIR}"
 echo ""
@@ -195,6 +198,16 @@ echo "All required tools found."
 echo ""
 
 FLNC_BAM="${FL_BAM}"
+
+sync_to_s3() {
+    local phase="$1"
+    echo "-------------------------------------------------------------------"
+    echo "Syncing output directory to S3 (${phase})"
+    echo "Destination: ${S3_TARGET}"
+    aws s3 sync "${OUTDIR}" "${S3_TARGET}"
+    echo "S3 sync completed at: $(date)"
+    echo ""
+}
 
 
 ################################################################################
@@ -219,6 +232,7 @@ if [ ! -f "${CLUSTERED_BAM}" ]; then
 fi
 
 echo "Clustering completed at: $(date)"
+sync_to_s3 "Step 1 - clustering"
 echo ""
 
 ################################################################################
@@ -250,6 +264,7 @@ echo "Indexing BAM file..."
 samtools index ${MAPPED_BAM}
 
 echo "Mapping completed at: $(date)"
+sync_to_s3 "Step 2 - mapping"
 echo ""
 
 ################################################################################
@@ -274,6 +289,7 @@ if [ ! -f "${COLLAPSED_GFF}" ]; then
 fi
 
 echo "Collapse completed at: $(date)"
+sync_to_s3 "Step 3 - collapse"
 echo ""
 
 ################################################################################
@@ -291,6 +307,7 @@ if [ ! -f "${ANNOTATION_GTF_SORTED}" ] || [ ! -f "${REFERENCE_GENOME_FAI}" ]; th
 fi
 
 echo "Reference files verified."
+sync_to_s3 "Step 4 - reference verification"
 echo ""
 
 ################################################################################
@@ -312,6 +329,7 @@ if [ ! -f "${SORTED_GFF}" ]; then
 fi
 
 echo "GFF sorting completed at: $(date)"
+sync_to_s3 "Step 5 - GFF sorting"
 echo ""
 
 ################################################################################
@@ -336,6 +354,7 @@ if [ ! -f "${CLASSIFICATION_FILE}" ]; then
 fi
 
 echo "Classification completed at: $(date)"
+sync_to_s3 "Step 6 - classification"
 echo ""
 
 ################################################################################
@@ -361,6 +380,7 @@ if [ ! -f "${FILTERED_CLASSIFICATION}" ]; then
 fi
 
 echo "Filtering completed at: $(date)"
+sync_to_s3 "Step 7 - filtering"
 echo ""
 
 ################################################################################
@@ -480,23 +500,7 @@ SUMMARY_EOF
 
 # Display summary
 cat ${SUMMARY}
-
-################################################################################
-# STEP 9: Sync results to S3
-################################################################################
-
-SYNC_TIMESTAMP=$(date -u +%Y%m%dT%H%M%SZ)
-S3_TARGET="${S3_DESTINATION%/}/${SAMPLE_NAME}_${SYNC_TIMESTAMP}"
-
-echo "==================================================================="
-echo "Syncing output directory to S3"
-echo "==================================================================="
-echo "Destination: ${S3_TARGET}"
-
-aws s3 sync "${OUTDIR}" "${S3_TARGET}"
-
-echo "S3 sync completed at: $(date)"
-echo ""
+sync_to_s3 "Step 8 - summary"
 
 ################################################################################
 # COMPLETION
