@@ -55,12 +55,12 @@ sudo /opt/micromamba/bin/micromamba --root-prefix $MAMBA_ROOT_PREFIX config appe
 sudo /opt/micromamba/bin/micromamba --root-prefix $MAMBA_ROOT_PREFIX config append channels defaults
 sudo /opt/micromamba/bin/micromamba --root-prefix $MAMBA_ROOT_PREFIX config set channel_priority strict
 
-# Create a base environment with bioinformatics tools
-echo "Creating base environment with bioinformatics tools..."
+# Create a bioinfo environment with bioinformatics tools
+echo "Creating bioinfo environment with bioinformatics tools..."
 echo "This may take several minutes..."
 sudo /opt/micromamba/bin/micromamba create \
     --root-prefix $MAMBA_ROOT_PREFIX \
-    -n base -y \
+    -n bioinfo -y \
     python=3.11 \
     isoseq3 \
     lima \
@@ -77,19 +77,19 @@ sudo mkdir -p /usr/local/bin
 
 # Create symlinks for all the tools
 for tool in isoseq3 lima pbmm2 pbpigeon samtools; do
-    if [ -f "$MAMBA_ROOT_PREFIX/base/bin/$tool" ]; then
-        sudo ln -sf "$MAMBA_ROOT_PREFIX/base/bin/$tool" /usr/local/bin/$tool
+    if [ -f "$MAMBA_ROOT_PREFIX/bioinfo/bin/$tool" ]; then
+        sudo ln -sf "$MAMBA_ROOT_PREFIX/bioinfo/bin/$tool" /usr/local/bin/$tool
         echo "Linked $tool to /usr/local/bin"
     else
-        echo "Warning: $tool not found at $MAMBA_ROOT_PREFIX/base/bin/$tool"
+        echo "Warning: $tool not found at $MAMBA_ROOT_PREFIX/bioinfo/bin/$tool"
     fi
 done
 
 # Also symlink commonly used dependencies
 echo "Linking additional dependencies..."
 for dep in python python3 pip; do
-    if [ -f "$MAMBA_ROOT_PREFIX/base/bin/$dep" ]; then
-        sudo ln -sf "$MAMBA_ROOT_PREFIX/base/bin/$dep" /usr/local/bin/$dep
+    if [ -f "$MAMBA_ROOT_PREFIX/bioinfo/bin/$dep" ]; then
+        sudo ln -sf "$MAMBA_ROOT_PREFIX/bioinfo/bin/$dep" /usr/local/bin/$dep
     fi
 done
 
