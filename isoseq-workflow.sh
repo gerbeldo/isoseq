@@ -309,6 +309,7 @@ echo "==================================================================="
 # Check if reference files are already prepared
 if [ ! -f "${ANNOTATION_GTF}.sorted.gtf" ] || [ ! -f "${REFERENCE_GENOME}.fai" ]; then
     echo "Preparing reference files (this only needs to be done once)..."
+    REFERENCE_GENOME="$(decompress_if_gz "${REFERENCE_GENOME}")"
     pigeon prepare ${ANNOTATION_GTF} ${REFERENCE_GENOME}
     echo "Reference preparation completed."
 else
