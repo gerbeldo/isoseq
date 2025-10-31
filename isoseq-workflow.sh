@@ -464,27 +464,6 @@ Key output files for downstream analysis:
    ${LOGFILE}
 
 ================================================================================
-Next Steps for Your Analysis
-================================================================================
-
-For your compound heterozygote study:
-
-1. Extract your gene of interest from the classification file
-2. Compare FL (full-length) read counts between disease and control samples
-3. Examine isoform structures in IGV using the GFF and BAM files
-4. Look for evidence of nonsense-mediated decay (reduced transcript levels)
-5. For allele-specific expression, examine SNPs in the BAM file to phase variants
-
-Recommended commands:
-
-  # Extract your gene (replace GENE_NAME with your gene symbol)
-  grep "GENE_NAME" ${CLASSIFICATION_FILE} > my_gene_classification.txt
-
-  # View in IGV
-  # Load: ${MAPPED_BAM} and ${COLLAPSED_GFF}
-  # Navigate to your gene coordinates
-
-================================================================================
 Pipeline completed successfully!
 Finished at: $(date)
 ================================================================================
