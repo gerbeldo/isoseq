@@ -3,10 +3,10 @@
 ################################################################################
 # PacBio Iso-Seq Bulk RNA-seq Analysis Pipeline (Single Sample)
 # For processing individual samples in parallel
-# Input: HiFi reads from PacBio Revio
+# Input: Full-length (FL/FLNC) reads BAM generated after primer removal/refine
 #
-# Usage: ./isoseq_pipeline.sh <sample_name> <hifi_reads.bam>
-# Example: ./isoseq_pipeline.sh disease_sample disease.hifi_reads.bam
+# Usage: ./isoseq_pipeline.sh <sample_name> <fl_bam>
+# Example: ./isoseq_pipeline.sh disease_sample disease.refined.fl.bam
 ################################################################################
 
 set -e  # Exit on error
@@ -20,21 +20,21 @@ set -o pipefail  # Exit on pipe failure
 if [ $# -ne 2 ]; then
     echo "ERROR: Incorrect number of arguments"
     echo ""
-    echo "Usage: $0 <sample_name> <hifi_reads_bam>"
+    echo "Usage: $0 <sample_name> <fl_bam>"
     echo ""
     echo "Arguments:"
     echo "  sample_name      Name for this sample (e.g., 'disease', 'control')"
-    echo "  hifi_reads_bam   Path to input HiFi reads BAM file"
+    echo "  fl_bam           Path to input full-length (FL/FLNC) reads BAM file"
     echo ""
     echo "Example:"
-    echo "  $0 disease disease_sample.hifi_reads.bam"
-    echo "  $0 control control_sample.hifi_reads.bam"
+    echo "  $0 disease disease_sample.refined.fl.bam"
+    echo "  $0 control control_sample.refined.fl.bam"
     echo ""
     exit 1
 fi
 
 SAMPLE_NAME="$1"
-HIFI_READS="$2"
+FL_BAM="$2"
 
 ################################################################################
 # CONFIGURATION - MODIFY THESE VARIABLES AS NEEDED
@@ -56,9 +56,6 @@ REFERENCE_GENOME_FAI="${REFERENCE_GENOME_FA}.fai"
 # Annotation files (provide both gzipped and uncompressed paths)
 ANNOTATION_GTF_GZ="${GENOME_DIR}/${ANNOTATION_GTF_BASENAME}.gz"
 ANNOTATION_GTF="${GENOME_DIR}/${ANNOTATION_GTF_BASENAME}"
-
-# Primer file for Iso-Seq (standard primers)
-PRIMERS="/home/ubuntu/data/ismb_workshop/isoseq_primers.fasta"
 
 # Output directory (will create subdirectory for this sample)
 OUTDIR="isoseq_output/${SAMPLE_NAME}"
@@ -86,15 +83,14 @@ echo "Started at: $(date)"
 echo ""
 
 # Check if input file exists
-if [ ! -f "${HIFI_READS}" ]; then
-    echo "ERROR: Input HiFi reads file not found: ${HIFI_READS}"
+if [ ! -f "${FL_BAM}" ]; then
+    echo "ERROR: Input full-length BAM file not found: ${FL_BAM}"
     exit 1
 fi
 
 # Check if reference files exist
 if [ ! -f "${REFERENCE_GENOME_GZ}" ]; then
     echo "ERROR: gzipped reference genome not found: ${REFERENCE_GENOME_GZ}"
-    echo "Download from: https://www.gencodegenes.org/human/"
     exit 1
 fi
 
@@ -105,7 +101,6 @@ fi
 
 if [ ! -f "${REFERENCE_GENOME_FA}" ]; then
     echo "ERROR: uncompressed reference genome not found: ${REFERENCE_GENOME_FA}"
-    echo "Download from: https://www.gencodegenes.org/human/"
     exit 1
 fi
 
@@ -116,7 +111,6 @@ fi
 
 if [ ! -f "${ANNOTATION_GTF_GZ}" ]; then
     echo "ERROR: gzipped annotation GTF not found: ${ANNOTATION_GTF_GZ}"
-    echo "Download from: https://www.gencodegenes.org/human/"
     exit 1
 fi
 
@@ -127,7 +121,6 @@ fi
 
 if [ ! -f "${ANNOTATION_GTF}" ]; then
     echo "ERROR: uncompressed annotation GTF not found: ${ANNOTATION_GTF}"
-    echo "Download from: https://www.gencodegenes.org/human/"
     exit 1
 fi
 
@@ -156,7 +149,7 @@ echo "==================================================================="
 echo "Step 0: Setting up directories and checking prerequisites"
 echo "==================================================================="
 
-mkdir -p ${OUTDIR}/{01_primers,02_refine,03_cluster,04_mapping,05_collapse,06_classification}
+mkdir -p ${OUTDIR}/{03_cluster,04_mapping,05_collapse,06_classification}
 
 TMP_BASE="${OUTDIR}/tmp"
 mkdir -p "${TMP_BASE}"
@@ -173,7 +166,7 @@ exec > >(tee -a ${LOGFILE})
 exec 2>&1
 
 echo "Sample name: ${SAMPLE_NAME}"
-echo "Input file: ${HIFI_READS}"
+echo "Input file: ${FL_BAM}"
 echo "Output directory: ${OUTDIR}"
 echo "Reference genome (pbmm2): ${REFERENCE_GENOME_GZ}"
 echo "Reference genome (pigeon): ${REFERENCE_GENOME_FA}"
@@ -184,7 +177,6 @@ echo "Temporary directory: ${TMPDIR}"
 echo ""
 
 # Check if required tools are installed
-command -v lima >/dev/null 2>&1 || { echo "ERROR: lima not found. Install via: conda install lima"; exit 1; }
 command -v isoseq >/dev/null 2>&1 || { echo "ERROR: isoseq not found. Install via: conda install isoseq"; exit 1; }
 command -v pbmm2 >/dev/null 2>&1 || { echo "ERROR: pbmm2 not found. Install via: conda install pbmm2"; exit 1; }
 command -v pigeon >/dev/null 2>&1 || { echo "ERROR: pigeon not found. Install via: conda install pbpigeon"; exit 1; }
@@ -193,68 +185,15 @@ command -v samtools >/dev/null 2>&1 || { echo "ERROR: samtools not found. Instal
 echo "All required tools found."
 echo ""
 
+FLNC_BAM="${FL_BAM}"
+
 
 ################################################################################
-# STEP 1: Primer Removal (lima)
-################################################################################
-
-echo "==================================================================="
-echo "Step 1: Removing primers with lima"
-echo "==================================================================="
-echo "Started at: $(date)"
-
-lima ${HIFI_READS} \
-    ${PRIMERS} \
-    ${OUTDIR}/01_primers/${SAMPLE_NAME}.fl.bam \
-    --isoseq \
-    --dump-clips \
-    --peek-guess \
-    --num-threads ${THREADS} \
-    --log-level DEBUG \
-    --log-file ${OUTDIR}/01_primers/${SAMPLE_NAME}.lima.log
-
-# Get the output BAM file (lima creates 5p--3p.bam)
-FL_BAM="${OUTDIR}/01_primers/${SAMPLE_NAME}.fl.5p--3p.bam"
-
-if [ ! -f "${FL_BAM}" ]; then
-    echo "ERROR: Lima did not produce expected output: ${FL_BAM}"
-    exit 1
-fi
-
-echo "Primer removal completed at: $(date)"
-echo ""
-
-################################################################################
-# STEP 2: Refine - Remove polyA tails and concatemers (isoseq refine)
+# STEP 1: Clustering - Isoform-level clustering (isoseq cluster2)
 ################################################################################
 
 echo "==================================================================="
-echo "Step 2: Refining reads - removing polyA tails and concatemers"
-echo "==================================================================="
-echo "Started at: $(date)"
-
-isoseq refine ${FL_BAM} ${PRIMERS} \
-    ${OUTDIR}/02_refine/${SAMPLE_NAME}.flnc.bam \
-    --num-threads ${THREADS} \
-    --log-level DEBUG \
-    --log-file ${OUTDIR}/02_refine/${SAMPLE_NAME}.refine.log
-
-FLNC_BAM="${OUTDIR}/02_refine/${SAMPLE_NAME}.flnc.bam"
-
-if [ ! -f "${FLNC_BAM}" ]; then
-    echo "ERROR: Refine did not produce expected output: ${FLNC_BAM}"
-    exit 1
-fi
-
-echo "Refine completed at: $(date)"
-echo ""
-
-################################################################################
-# STEP 3: Clustering - Isoform-level clustering (isoseq cluster2)
-################################################################################
-
-echo "==================================================================="
-echo "Step 3: Clustering isoforms with cluster2"
+echo "Step 1: Clustering isoforms with cluster2"
 echo "==================================================================="
 echo "Started at: $(date)"
 
@@ -274,11 +213,11 @@ echo "Clustering completed at: $(date)"
 echo ""
 
 ################################################################################
-# STEP 4: Mapping - Align to reference genome (pbmm2)
+# STEP 2: Mapping - Align to reference genome (pbmm2)
 ################################################################################
 
 echo "==================================================================="
-echo "Step 4: Mapping transcripts to reference genome with pbmm2"
+echo "Step 2: Mapping transcripts to reference genome with pbmm2"
 echo "==================================================================="
 echo "Started at: $(date)"
 
@@ -305,11 +244,11 @@ echo "Mapping completed at: $(date)"
 echo ""
 
 ################################################################################
-# STEP 5: Collapse - Remove redundant transcripts (isoseq collapse)
+# STEP 3: Collapse - Remove redundant transcripts (isoseq collapse)
 ################################################################################
 
 echo "==================================================================="
-echo "Step 5: Collapsing redundant transcripts"
+echo "Step 3: Collapsing redundant transcripts"
 echo "==================================================================="
 echo "Started at: $(date)"
 
@@ -329,11 +268,11 @@ echo "Collapse completed at: $(date)"
 echo ""
 
 ################################################################################
-# STEP 6: Verify prepared reference files
+# STEP 4: Verify prepared reference files
 ################################################################################
 
 echo "==================================================================="
-echo "Step 6: Verifying prepared reference files for pigeon"
+echo "Step 4: Verifying prepared reference files for pigeon"
 echo "==================================================================="
 
 if [ ! -f "${ANNOTATION_GTF_SORTED}" ] || [ ! -f "${REFERENCE_GENOME_FAI}" ]; then
@@ -346,11 +285,11 @@ echo "Reference files verified."
 echo ""
 
 ################################################################################
-# STEP 7: Sort transcript GFF files
+# STEP 5: Sort transcript GFF files
 ################################################################################
 
 echo "==================================================================="
-echo "Step 7: Sorting transcript GFF file"
+echo "Step 5: Sorting transcript GFF file"
 echo "==================================================================="
 echo "Started at: $(date)"
 
@@ -367,11 +306,11 @@ echo "GFF sorting completed at: $(date)"
 echo ""
 
 ################################################################################
-# STEP 8: Classification - Classify isoforms (pigeon classify)
+# STEP 6: Classification - Classify isoforms (pigeon classify)
 ################################################################################
 
 echo "==================================================================="
-echo "Step 8: Classifying transcripts with pigeon"
+echo "Step 6: Classifying transcripts with pigeon"
 echo "==================================================================="
 echo "Started at: $(date)"
 
@@ -391,11 +330,11 @@ echo "Classification completed at: $(date)"
 echo ""
 
 ################################################################################
-# STEP 9: Filter - Remove low-quality transcripts (pigeon filter)
+# STEP 7: Filter - Remove low-quality transcripts (pigeon filter)
 ################################################################################
 
 echo "==================================================================="
-echo "Step 9: Filtering transcripts with pigeon"
+echo "Step 7: Filtering transcripts with pigeon"
 echo "==================================================================="
 echo "Started at: $(date)"
 
@@ -416,11 +355,11 @@ echo "Filtering completed at: $(date)"
 echo ""
 
 ################################################################################
-# STEP 10: Generate summary report
+# STEP 8: Generate summary report
 ################################################################################
 
 echo "==================================================================="
-echo "Step 10: Generating summary report"
+echo "Step 8: Generating summary report"
 echo "==================================================================="
 
 SUMMARY="${OUTDIR}/${SAMPLE_NAME}_analysis_summary.txt"
@@ -431,7 +370,7 @@ PacBio Iso-Seq Analysis Summary
 ================================================================================
 
 Sample Name: ${SAMPLE_NAME}
-Input File: ${HIFI_READS}
+Input File: ${FL_BAM}
 Analysis Date: $(date)
 
 ================================================================================
@@ -444,25 +383,17 @@ SUMMARY_EOF
 echo "Processing Statistics:" >> ${SUMMARY}
 echo "" >> ${SUMMARY}
 
-# Full-length reads from lima
-if [ -f "${OUTDIR}/01_primers/${SAMPLE_NAME}.lima.log" ]; then
-    echo "1. Primer Removal (lima):" >> ${SUMMARY}
-    FL_READS=$(grep -c "^>" ${FL_BAM} 2>/dev/null || samtools view -c ${FL_BAM} 2>/dev/null || echo "N/A")
-    echo "   Full-length reads after primer removal: ${FL_READS}" >> ${SUMMARY}
-    echo "" >> ${SUMMARY}
-fi
-
-# FLNC reads from refine
+# Input full-length reads
 if [ -f "${FLNC_BAM}" ]; then
-    echo "2. Refine (FLNC reads):" >> ${SUMMARY}
+    echo "1. Input FL/FLNC reads:" >> ${SUMMARY}
     FLNC_COUNT=$(samtools view -c ${FLNC_BAM} 2>/dev/null || echo "N/A")
-    echo "   Full-length non-chimeric (FLNC) reads: ${FLNC_COUNT}" >> ${SUMMARY}
+    echo "   Full-length reads available for clustering: ${FLNC_COUNT}" >> ${SUMMARY}
     echo "" >> ${SUMMARY}
 fi
 
 # Clustered transcripts
 if [ -f "${CLUSTERED_BAM}" ]; then
-    echo "3. Clustering:" >> ${SUMMARY}
+    echo "2. Clustering:" >> ${SUMMARY}
     CLUSTERED_COUNT=$(samtools view -c ${CLUSTERED_BAM} 2>/dev/null || echo "N/A")
     echo "   Clustered transcripts: ${CLUSTERED_COUNT}" >> ${SUMMARY}
     echo "" >> ${SUMMARY}
@@ -470,7 +401,7 @@ fi
 
 # Mapped transcripts
 if [ -f "${MAPPED_BAM}" ]; then
-    echo "4. Mapping:" >> ${SUMMARY}
+    echo "3. Mapping:" >> ${SUMMARY}
     MAPPED_COUNT=$(samtools view -c -F 4 ${MAPPED_BAM} 2>/dev/null || echo "N/A")
     UNMAPPED_COUNT=$(samtools view -c -f 4 ${MAPPED_BAM} 2>/dev/null || echo "N/A")
     echo "   Mapped transcripts: ${MAPPED_COUNT}" >> ${SUMMARY}
@@ -480,7 +411,7 @@ fi
 
 # Collapsed transcripts
 if [ -f "${COLLAPSED_GFF}" ]; then
-    echo "5. Collapse:" >> ${SUMMARY}
+    echo "4. Collapse:" >> ${SUMMARY}
     COLLAPSED_COUNT=$(grep -v "^#" ${COLLAPSED_GFF} | wc -l)
     echo "   Collapsed transcripts (unique isoforms): ${COLLAPSED_COUNT}" >> ${SUMMARY}
     echo "" >> ${SUMMARY}
@@ -488,7 +419,7 @@ fi
 
 # Classified transcripts
 if [ -f "${CLASSIFICATION_FILE}" ]; then
-    echo "6. Classification:" >> ${SUMMARY}
+    echo "5. Classification:" >> ${SUMMARY}
     TOTAL_TRANSCRIPTS=$(tail -n +2 ${CLASSIFICATION_FILE} | wc -l)
     echo "   Total classified transcripts: ${TOTAL_TRANSCRIPTS}" >> ${SUMMARY}
 
@@ -501,7 +432,7 @@ fi
 
 # Filtered transcripts
 if [ -f "${FILTERED_CLASSIFICATION}" ]; then
-    echo "7. Filtering:" >> ${SUMMARY}
+    echo "6. Filtering:" >> ${SUMMARY}
     FILTERED_COUNT=$(tail -n +2 ${FILTERED_CLASSIFICATION} | wc -l)
     echo "   High-quality filtered transcripts: ${FILTERED_COUNT}" >> ${SUMMARY}
     echo "" >> ${SUMMARY}
