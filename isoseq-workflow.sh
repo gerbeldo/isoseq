@@ -236,7 +236,7 @@ echo "Started at: $(date)"
 isoseq refine ${FL_BAM} ${PRIMERS} \
     ${OUTDIR}/02_refine/${SAMPLE_NAME}.flnc.bam \
     --num-threads ${THREADS} \
-    --log-level INFO \
+    --log-level DEBUG \
     --log-file ${OUTDIR}/02_refine/${SAMPLE_NAME}.refine.log
 
 FLNC_BAM="${OUTDIR}/02_refine/${SAMPLE_NAME}.flnc.bam"
@@ -261,8 +261,7 @@ echo "Started at: $(date)"
 isoseq cluster2 ${FLNC_BAM} \
     ${OUTDIR}/03_cluster/${SAMPLE_NAME}.clustered.bam \
     --num-threads ${THREADS} \
-    --use-qvs \
-    --log-level INFO
+    --log-level DEBUG
 
 CLUSTERED_BAM="${OUTDIR}/03_cluster/${SAMPLE_NAME}.clustered.bam"
 
@@ -291,7 +290,7 @@ pbmm2 align ${REFERENCE_GENOME_GZ} ${CLUSTERED_BAM} \
     --preset ISOSEQ \
     --sort \
     -j ${THREADS} \
-    --log-level INFO
+    --log-level DEBUG
 
 if [ ! -f "${MAPPED_BAM}" ]; then
     echo "ERROR: pbmm2 did not produce expected output: ${MAPPED_BAM}"
@@ -317,7 +316,7 @@ echo "Started at: $(date)"
 isoseq collapse ${MAPPED_BAM} ${FLNC_BAM} \
     ${OUTDIR}/05_collapse/${SAMPLE_NAME}.collapsed.gff \
     --do-not-collapse-extra-5exons \
-    --log-level INFO
+    --log-level DEBUG
 
 COLLAPSED_GFF="${OUTDIR}/05_collapse/${SAMPLE_NAME}.collapsed.gff"
 
@@ -378,7 +377,7 @@ echo "Started at: $(date)"
 
 pigeon classify ${SORTED_GFF} ${ANNOTATION_GTF_SORTED} ${REFERENCE_GENOME_FA} \
     --flnc ${OUTDIR}/05_collapse/${SAMPLE_NAME}.collapsed.flnc_count.txt \
-    --log-level INFO \
+    --log-level DEBUG \
     --out-dir ${OUTDIR}/06_classification
 
 CLASSIFICATION_FILE="${OUTDIR}/06_classification/${SAMPLE_NAME}_classification.txt"
@@ -402,7 +401,9 @@ echo "Started at: $(date)"
 
 pigeon filter \
     ${CLASSIFICATION_FILE} \
-    --isoforms ${SORTED_GFF}
+    --isoforms ${SORTED_GFF} \
+    --log-level DEBUG
+
 
 FILTERED_CLASSIFICATION="${OUTDIR}/06_classification/${SAMPLE_NAME}_classification.filtered_lite_classification.txt"
 
