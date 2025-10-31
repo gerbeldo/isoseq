@@ -53,10 +53,10 @@ micromamba config set channel_priority strict
 
 # Create a base environment with bioinformatics tools
 echo "Creating bioinformatics environment..."
-micromamba create -n bioinfo -y python=3.11
+micromamba create -n bioinfo -y python=3.11 -r ~/micromamba
 
 # Activate the environment
-micromamba activate bioinfo
+micromamba activate bioinfo -r ~/micromamba -r ~/micromamba
 
 # Install bioinformatics packages
 echo "Installing bioinformatics tools from bioconda..."
@@ -65,7 +65,8 @@ micromamba install -y \
     lima \
     pbmm2 \
     pbpigeon \
-    samtools
+    samtools \
+    -r ~/micromamba
 
 # Verify installations
 echo ""
