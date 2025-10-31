@@ -43,7 +43,12 @@ HIFI_READS="$2"
 # Reference assets directory and filenames
 GENOME_DIR="/home/ubuntu/genomes"
 REFERENCE_GENOME_BASENAME="GRCh38.p14.genome.fa"
-ANNOTATION_GTF_BASENAME="gencode.v49.chr_patch_hapl_scaff.annotation.gtf"
+ANNOTATION_GTF_BASENAME="gencode.v49.primary_assembly.annotation.gtf"
+
+# sorted references
+ANNOTATION_GTF_SORTED="${GENOME_DIR}/gencode.v49.primary_assembly.annotation.gtf"
+REFERENCE_GENOME_FAI="${REFERENCE_GENOME_FA}.fai"
+
 
 # Reference genome files (provide both gzipped and uncompressed paths)
 REFERENCE_GENOME_GZ="${GENOME_DIR}/${REFERENCE_GENOME_BASENAME}.gz"
@@ -133,9 +138,6 @@ fi
 ################################################################################
 # STEP 0: Reference path setup
 ################################################################################
-
-ANNOTATION_GTF_SORTED="${ANNOTATION_GTF}.sorted.gtf"
-REFERENCE_GENOME_FAI="${REFERENCE_GENOME_FA}.fai"
 
 echo "Using reference assets:"
 echo "  Reference directory:       ${GENOME_DIR}"
