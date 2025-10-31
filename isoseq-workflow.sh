@@ -379,7 +379,7 @@ echo "Started at: $(date)"
 pigeon classify ${SORTED_GFF} ${ANNOTATION_GTF_SORTED} ${REFERENCE_GENOME_FA} \
     --flnc ${OUTDIR}/05_collapse/${SAMPLE_NAME}.collapsed.flnc_count.txt \
     --log-level INFO \
-    --out-dir ${OUTDIR}/06_classification/${SAMPLE_NAME}
+    --out-dir ${OUTDIR}/06_classification
 
 CLASSIFICATION_FILE="${OUTDIR}/06_classification/${SAMPLE_NAME}_classification.txt"
 
