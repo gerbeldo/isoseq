@@ -30,6 +30,7 @@ apt-get install -y \
 # Create a dedicated directory for micromamba installation
 MICROMAMBA_DIR="/opt/micromamba"
 MICROMAMBA_ENV_DIR="/opt/micromamba/envs/isoseq"
+MICROMAMBA_BIN="${MICROMAMBA_DIR}/bin/micromamba"
 
 echo "Installing micromamba to ${MICROMAMBA_DIR}..."
 
@@ -42,15 +43,13 @@ MICROMAMBA_VERSION=$(curl -s https://api.github.com/repos/mamba-org/micromamba-r
 MICROMAMBA_DOWNLOAD_URL="https://github.com/mamba-org/micromamba-releases/releases/download/${MICROMAMBA_VERSION}/micromamba-linux-64"
 
 echo "Downloading micromamba version ${MICROMAMBA_VERSION}..."
-curl -fsSL "${MICROMAMBA_DOWNLOAD_URL}" -o "${MICROMAMBA_DIR}/micromamba"
-chmod +x "${MICROMAMBA_DIR}/micromamba"
-
-echo "Initializing micromamba..."
-"${MICROMAMBA_DIR}/micromamba" shell init -s bash -r "${MICROMAMBA_DIR}"
+curl -fsSL "${MICROMAMBA_DOWNLOAD_URL}" -o "${MICROMAMBA_BIN}"
+chmod +x "${MICROMAMBA_BIN}"
 
 # Create isoseq conda environment with required tools
 echo "Creating isoseq conda environment with bioinformatics tools..."
-"${MICROMAMBA_DIR}/micromamba" create \
+export MAMBA_ROOT_PREFIX="${MICROMAMBA_DIR}"
+"${MICROMAMBA_BIN}" create \
     -y \
     -p "${MICROMAMBA_ENV_DIR}" \
     -c bioconda \
@@ -65,12 +64,12 @@ echo "Creating isoseq conda environment with bioinformatics tools..."
 echo "Setting up automatic activation on shell startup..."
 
 PROFILE_SCRIPT="/etc/profile.d/isoseq-env.sh"
-cat > "${PROFILE_SCRIPT}" << 'EOF'
+cat > "${PROFILE_SCRIPT}" << EOF
 # Automatically activate isoseq environment
-if [ -f "/opt/micromamba/etc/profile.d/micromamba.sh" ]; then
-    source "/opt/micromamba/etc/profile.d/micromamba.sh"
-    micromamba activate /opt/micromamba/envs/isoseq
-fi
+export MAMBA_EXE="${MICROMAMBA_BIN}"
+export MAMBA_ROOT_PREFIX="${MICROMAMBA_DIR}"
+eval "\$("${MICROMAMBA_BIN}" shell hook --shell bash --root-prefix "${MICROMAMBA_DIR}" 2>/dev/null)" || true
+micromamba activate "${MICROMAMBA_ENV_DIR}" 2>/dev/null || true
 EOF
 
 chmod 644 "${PROFILE_SCRIPT}"
@@ -79,12 +78,12 @@ chmod 644 "${PROFILE_SCRIPT}"
 echo "Configuring bashrc for interactive shell sessions..."
 
 BASHRC_CONFIG="/opt/micromamba/bashrc-config.sh"
-cat > "${BASHRC_CONFIG}" << 'EOF'
+cat > "${BASHRC_CONFIG}" << EOF
 # Micromamba and isoseq environment configuration
-if [ -f "/opt/micromamba/etc/profile.d/micromamba.sh" ]; then
-    source "/opt/micromamba/etc/profile.d/micromamba.sh"
-    micromamba activate /opt/micromamba/envs/isoseq
-fi
+export MAMBA_EXE="${MICROMAMBA_BIN}"
+export MAMBA_ROOT_PREFIX="${MICROMAMBA_DIR}"
+eval "\$("${MICROMAMBA_BIN}" shell hook --shell bash --root-prefix "${MICROMAMBA_DIR}" 2>/dev/null)" || true
+micromamba activate "${MICROMAMBA_ENV_DIR}" 2>/dev/null || true
 EOF
 
 chmod 644 "${BASHRC_CONFIG}"
@@ -132,8 +131,10 @@ chmod +x "${VERIFY_SCRIPT}"
 # Final verification
 echo ""
 echo "Running final verification..."
-source /opt/micromamba/etc/profile.d/micromamba.sh
-micromamba activate /opt/micromamba/envs/isoseq
+export MAMBA_EXE="${MICROMAMBA_BIN}"
+export MAMBA_ROOT_PREFIX="${MICROMAMBA_DIR}"
+eval "$("${MICROMAMBA_BIN}" shell hook --shell bash --root-prefix "${MICROMAMBA_DIR}" 2>/dev/null)" || true
+micromamba activate "${MICROMAMBA_ENV_DIR}" 2>/dev/null || true
 
 "${VERIFY_SCRIPT}"
 
@@ -142,7 +143,6 @@ echo "Setup complete!"
 echo ""
 echo "To use the isoseq environment in new shell sessions, tools will be automatically available."
 echo "If needed, you can manually activate with:"
-echo "  source /opt/micromamba/etc/profile.d/micromamba.sh"
-echo "  micromamba activate /opt/micromamba/envs/isoseq"
+echo "  source /opt/micromamba/bashrc-config.sh"
 echo ""
 echo "To verify installation, run: verify-isoseq-tools"
