@@ -39,6 +39,12 @@ rmdir bin  # Clean up the temporary directory
 echo "Setting up micromamba..."
 export MAMBA_ROOT_PREFIX=/opt/micromamba/envs
 
+# Remove any existing environment directory to start fresh
+if [ -d "$MAMBA_ROOT_PREFIX" ]; then
+    echo "Removing existing micromamba environment..."
+    sudo rm -rf $MAMBA_ROOT_PREFIX
+fi
+
 # Create the base environment directory
 sudo mkdir -p $MAMBA_ROOT_PREFIX
 
