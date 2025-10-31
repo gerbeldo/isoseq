@@ -1,107 +1,105 @@
-#!/usr/bin/env bash
-set -euxo pipefail
+#!/bin/bash
 
-# This script targets a single login user. It is safe to re-run.
-# It installs:
-# - micromamba → ~/.local/bin/micromamba
-# - root prefix (base env) → ~/mamba
-# - auto shell init + auto-activate for bash/zsh
+# Bioinformatics EC2 Setup Script
+# This script installs micromamba and bioconda packages for PacBio analysis
+# Designed for Ubuntu EC2 instances
 
-#### 0) Resolve the real target user & home, even if invoked with sudo
-if [ -n "${SUDO_USER:-}" ] && [ "$SUDO_USER" != "root" ]; then
-  TARGET_USER="$SUDO_USER"
-else
-  TARGET_USER="$(id -un)"
-fi
-TARGET_HOME="$(getent passwd "$TARGET_USER" | cut -d: -f6)"
-BIN_DIR="$TARGET_HOME/.local/bin"
-DL_DIR="$TARGET_HOME/.cache/mamba-dl"
-export MAMBA_ROOT_PREFIX="$TARGET_HOME/mamba"   # root prefix == "base" env location
+set -e  # Exit on any error
 
-# Helper to run as the target user with their env
-run_user() { sudo -u "$TARGET_USER" --preserve-env=PATH,HOME bash -lc "$*"; }
+echo "=========================================="
+echo "Starting bioinformatics environment setup"
+echo "=========================================="
 
-#### 1) Minimal deps (only uses sudo for apt)
-if command -v apt-get >/dev/null 2>&1; then
-  sudo apt-get update
-  sudo apt-get install -y --no-install-recommends curl ca-certificates bzip2 xz-utils tar
-  sudo apt-get clean
-  sudo rm -rf /var/lib/apt/lists/*
-fi
+# Update system packages
+echo "Updating system packages..."
+sudo apt-get update
+sudo apt-get upgrade -y
 
-#### 2) Prepare user directories with correct ownership
-sudo -u "$TARGET_USER" mkdir -p "$BIN_DIR" "$DL_DIR" "$MAMBA_ROOT_PREFIX"
-sudo chown -R "$TARGET_USER":"$TARGET_USER" "$TARGET_HOME/.local" "$TARGET_HOME/.cache" "$MAMBA_ROOT_PREFIX"
+# Install basic dependencies
+echo "Installing system dependencies..."
+sudo apt-get install -y \
+    curl \
+    bzip2 \
+    ca-certificates \
+    git \
+    wget
 
-#### 3) Install micromamba (no /tmp; correct archive; arch-aware)
-ARCH="$(uname -m)"
-case "$ARCH" in
-  x86_64)  MAMBA_URL="https://micro.mamba.pm/api/micromamba/linux-64/latest" ;;
-  aarch64) MAMBA_URL="https://micro.mamba.pm/api/micromamba/linux-aarch64/latest" ;;
-  *) echo "Unsupported arch: $ARCH" >&2; exit 1 ;;
-esac
+# Install micromamba
+echo "Installing micromamba..."
+# The download URL returns a tar.bz2 archive
+# We pipe it directly to tar which extracts the bin/micromamba file
+curl -Ls https://micro.mamba.pm/api/micromamba/linux-64/latest | tar -xvj bin/micromamba
 
-run_user "curl -fL -o '$DL_DIR/micromamba.tar.bz2' '$MAMBA_URL'"
-# Extract the single binary to ~/.local/bin
-tar -xvjf "$DL_DIR/micromamba.tar.bz2" -C "$BIN_DIR" --strip-components=1 bin/micromamba
-sudo chown "$TARGET_USER":"$TARGET_USER" "$BIN_DIR/micromamba"
-chmod 0755 "$BIN_DIR/micromamba"
-rm -f "$DL_DIR/micromamba.tar.bz2"
+# Move to a permanent location
+sudo mkdir -p /opt/micromamba
+sudo mv bin/micromamba /opt/micromamba/
+sudo chmod +x /opt/micromamba/micromamba
+rmdir bin  # Clean up the temporary directory
 
-# Ensure ~/.local/bin is first on PATH for this user (bash + login shells)
-for FILE in "$TARGET_HOME/.bashrc" "$TARGET_HOME/.profile"; do
-  sudo -u "$TARGET_USER" touch "$FILE"
-  if ! sudo -u "$TARGET_USER" grep -q '\$HOME/.local/bin' "$FILE"; then
-    echo 'export PATH="$HOME/.local/bin:$PATH"' | sudo tee -a "$FILE" >/dev/null
-  fi
-done
+# Initialize micromamba for current user
+echo "Initializing micromamba..."
+/opt/micromamba/micromamba shell init -s bash --root-prefix ~/micromamba
 
-#### 4) Create/upgrade the "base" env at the root prefix
-# IMPORTANT: use -p $MAMBA_ROOT_PREFIX (not -n base) to target the root prefix
-if [ -d "$MAMBA_ROOT_PREFIX/conda-meta" ]; then
-  # already exists → ensure packages are present/updated
-  run_user "MAMBA_ROOT_PREFIX='$MAMBA_ROOT_PREFIX' '$BIN_DIR/micromamba' install -y -p '$MAMBA_ROOT_PREFIX' -c conda-forge -c bioconda \
-            isoseq3 lima pbmm2 pbpigeon samtools"
-else
-  run_user "MAMBA_ROOT_PREFIX='$MAMBA_ROOT_PREFIX' '$BIN_DIR/micromamba' create  -y -p '$MAMBA_ROOT_PREFIX' -c conda-forge -c bioconda \
-            isoseq3 lima pbmm2 pbpigeon samtools"
-fi
-run_user "MAMBA_ROOT_PREFIX='$MAMBA_ROOT_PREFIX' '$BIN_DIR/micromamba' clean -a -y -p '$MAMBA_ROOT_PREFIX'"
+# Source the shell configuration to make micromamba available
+export MAMBA_ROOT_PREFIX=~/micromamba
+eval "$(/opt/micromamba/micromamba shell hook -s bash)"
 
-#### 5) Shell init + auto-activation (bash & zsh if present)
-# Add the micromamba hook and auto-activate base for interactive shells.
-# (Keeps things simple for interactive use; comment out the 'micromamba activate' line if you prefer manual activation.)
+# Configure conda channels
+echo "Configuring bioconda channels..."
+micromamba config append channels conda-forge
+micromamba config append channels bioconda
+micromamba config append channels defaults
+micromamba config set channel_priority strict
 
-# Bash
-BASHRC="$TARGET_HOME/.bashrc"
-if ! sudo -u "$TARGET_USER" grep -q 'micromamba shell hook -s bash' "$BASHRC"; then
-  run_user "eval \"\$('$BIN_DIR/micromamba' shell hook -s bash)\" >/dev/null 2>&1 || true"
-  {
-    echo ''
-    echo '# micromamba init (bash)'
-    echo 'eval "$($HOME/.local/bin/micromamba shell hook -s bash)"'
-    echo "export MAMBA_ROOT_PREFIX=\"$MAMBA_ROOT_PREFIX\""
-    echo 'micromamba activate'   # auto-activate base
-  } | sudo tee -a "$BASHRC" >/dev/null
-fi
+# Create a base environment with bioinformatics tools
+echo "Creating bioinformatics environment..."
+micromamba create -n bioinfo -y python=3.11 -r ~/micromamba
 
-# Zsh (only if user has zsh config already)
-if [ -f "$TARGET_HOME/.zshrc" ]; then
-  ZSHRC="$TARGET_HOME/.zshrc"
-  if ! sudo -u "$TARGET_USER" grep -q 'micromamba shell hook -s zsh' "$ZSHRC"; then
-    {
-      echo ''
-      echo '# micromamba init (zsh)'
-      echo 'eval "$($HOME/.local/bin/micromamba shell hook -s zsh)"'
-      echo "export MAMBA_ROOT_PREFIX=\"$MAMBA_ROOT_PREFIX\""
-      echo 'micromamba activate'
-    } | sudo tee -a "$ZSHRC" >/dev/null
-  fi
-fi
+# Activate the environment
+micromamba activate bioinfo -r ~/micromamba -r ~/micromamba
 
-#### 6) Sanity checks (new interactive shell to verify auto-activation + commands)
-run_user 'bash -lc "isoseq3 --version && lima --version && pbmm2 --version && samtools --version && pbpigeon --help >/dev/null"'
+# Install bioinformatics packages
+echo "Installing bioinformatics tools from bioconda..."
+micromamba install -y \
+    isoseq3 \
+    lima \
+    pbmm2 \
+    pbpigeon \
+    samtools \
+    -r ~/micromamba
 
-echo "✅ Done. Open a NEW shell (or 'exec \$SHELL') and your base env will be active automatically."
-echo "   micromamba: $BIN_DIR/micromamba"
-echo "   root prefix (base env): $MAMBA_ROOT_PREFIX"
+# Verify installations
+echo ""
+echo "=========================================="
+echo "Verifying installations..."
+echo "=========================================="
+
+micromamba activate bioinfo
+
+echo "isoseq3 version:"
+isoseq3 --version 2>&1 | head -n 1 || echo "isoseq3 check failed"
+
+echo "lima version:"
+lima --version 2>&1 | head -n 1 || echo "lima check failed"
+
+echo "pbmm2 version:"
+pbmm2 --version 2>&1 | head -n 1 || echo "pbmm2 check failed"
+
+echo "pbpigeon version:"
+pbpigeon --version 2>&1 | head -n 1 || echo "pbpigeon check failed"
+
+echo "samtools version:"
+samtools --version 2>&1 | head -n 1 || echo "samtools check failed"
+
+echo ""
+echo "=========================================="
+echo "Setup complete!"
+echo "=========================================="
+echo ""
+echo "To use the bioinformatics tools:"
+echo "1. Start a new shell session or run: source ~/.bashrc"
+echo "2. Activate the environment: micromamba activate bioinfo"
+echo "3. Run your tools: isoseq3, lima, pbmm2, pbpigeon, samtools"
+echo ""
+echo "The environment will be automatically available after creating an AMI."
+echo "=========================================="
