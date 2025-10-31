@@ -1,138 +1,121 @@
-#!/bin/bash
+#!/usr/bin/env bash
+# install_pb_tools.sh
+# Ubuntu (x86_64) micromamba + PacBio stack with global wrappers.
 
-# Bioinformatics EC2 Setup Script
-# This script installs micromamba and bioconda packages globally
-# Tools will be available system-wide without activating environments
-# Designed for Ubuntu EC2 instances
+set -euo pipefail
 
-set -e  # Exit on any error
+MAMBA_ROOT_PREFIX="/opt/micromamba"
+ENV_NAME="pb"
+WRAP_DIR="/usr/local/bin"
 
-echo "=========================================="
-echo "Starting bioinformatics environment setup"
-echo "=========================================="
-
-# Update system packages
-echo "Updating system packages..."
-sudo apt-get update
-sudo apt-get upgrade -y
-
-# Install basic dependencies
-echo "Installing system dependencies..."
-sudo apt-get install -y \
-    curl \
-    bzip2 \
-    ca-certificates \
-    git \
-    wget
-
-# Install micromamba
-echo "Installing micromamba..."
-curl -Ls https://micro.mamba.pm/api/micromamba/linux-64/latest | tar -xvj bin/micromamba
-
-# Move to a permanent location
-sudo mkdir -p /opt/micromamba/bin
-sudo mv bin/micromamba /opt/micromamba/bin/
-sudo chmod +x /opt/micromamba/bin/micromamba
-rmdir bin  # Clean up the temporary directory
-
-# Set up micromamba with a global installation directory
-echo "Setting up micromamba..."
-export MAMBA_ROOT_PREFIX=/opt/micromamba/envs
-
-# Remove any existing environment directory to start fresh
-if [ -d "$MAMBA_ROOT_PREFIX" ]; then
-    echo "Removing existing micromamba environment..."
-    sudo rm -rf $MAMBA_ROOT_PREFIX
+# --- Assert amd64 Ubuntu ---
+if [[ "$(dpkg --print-architecture)" != "amd64" ]]; then
+  echo "[x] This script targets x86_64 (amd64). Detected: $(dpkg --print-architecture)"
+  exit 1
 fi
 
-# Create the base environment directory
-sudo mkdir -p $MAMBA_ROOT_PREFIX
+# --- Minimal deps ---
+export DEBIAN_FRONTEND=noninteractive
+sudo apt-get update -y
+sudo apt-get install -y --no-install-recommends curl ca-certificates bzip2 tar
+sudo update-ca-certificates
 
-# Configure conda channels (these commands don't require activation)
-echo "Configuring bioconda channels..."
-sudo /opt/micromamba/bin/micromamba --root-prefix $MAMBA_ROOT_PREFIX config append channels conda-forge
-sudo /opt/micromamba/bin/micromamba --root-prefix $MAMBA_ROOT_PREFIX config append channels bioconda
-sudo /opt/micromamba/bin/micromamba --root-prefix $MAMBA_ROOT_PREFIX config append channels defaults
-sudo /opt/micromamba/bin/micromamba --root-prefix $MAMBA_ROOT_PREFIX config set channel_priority strict
+# --- Install micromamba binary on PATH ---
+echo "[+] Installing micromamba to /usr/local/bin ..."
+TMP_TAR="$(mktemp)"
+curl -fsSL "https://micro.mamba.pm/api/micromamba/linux-64/latest" -o "${TMP_TAR}"
+sudo tar -xj -f "${TMP_TAR}" -C /usr/local/bin --strip-components=1 bin/micromamba
+rm -f "${TMP_TAR}"
+/usr/local/bin/micromamba --version
 
-# Create a bioinfo environment with bioinformatics tools
-echo "Creating bioinfo environment with bioinformatics tools..."
-echo "This may take several minutes..."
-sudo /opt/micromamba/bin/micromamba create \
-    --root-prefix $MAMBA_ROOT_PREFIX \
-    -n bioinfo -y \
-    python=3.11 \
-    isoseq3 \
-    lima \
-    pbmm2 \
-    pbpigeon \
-    samtools \
-    -c conda-forge \
-    -c bioconda \
-    -c defaults
+# --- Prefix + profile hook (for interactive use) ---
+echo "[+] Preparing prefix at ${MAMBA_ROOT_PREFIX} ..."
+sudo mkdir -p "${MAMBA_ROOT_PREFIX}"
+MAMBA_USER="${SUDO_USER:-$USER}"
+sudo chown -R "${MAMBA_USER}:${MAMBA_USER}" "${MAMBA_ROOT_PREFIX}"
 
-# Add tools to system PATH by creating symlinks
-echo "Making tools available system-wide..."
-sudo mkdir -p /usr/local/bin
+echo "[+] Writing /etc/profile.d/micromamba.sh ..."
+sudo tee /etc/profile.d/micromamba.sh >/dev/null <<'EOF'
+export MAMBA_ROOT_PREFIX=/opt/micromamba
+if command -v micromamba >/dev/null 2>&1; then
+  eval "$(micromamba shell hook -s bash)"
+fi
+EOF
+sudo chmod 0644 /etc/profile.d/micromamba.sh
 
-# Create symlinks for all the tools
-for tool in isoseq3 lima pbmm2 pbpigeon samtools; do
-    if [ -f "$MAMBA_ROOT_PREFIX/bioinfo/bin/$tool" ]; then
-        sudo ln -sf "$MAMBA_ROOT_PREFIX/bioinfo/bin/$tool" /usr/local/bin/$tool
-        echo "Linked $tool to /usr/local/bin"
-    else
-        echo "Warning: $tool not found at $MAMBA_ROOT_PREFIX/bioinfo/bin/$tool"
-    fi
+# --- Create env + install tools ---
+echo "[+] Creating env '${ENV_NAME}' and installing tools ..."
+sudo -u "${MAMBA_USER}" bash -lc '
+  set -euo pipefail
+  export MAMBA_ROOT_PREFIX='"${MAMBA_ROOT_PREFIX}"'
+  eval "$(micromamba shell hook -s bash)"
+
+  micromamba create -y -n '"${ENV_NAME}"' \
+    -c conda-forge -c bioconda --channel-priority strict \
+    isoseq3 lima pbmm2 pbpigeon samtools
+
+  micromamba clean -a -y
+'
+
+# --- Create global wrapper scripts so no activation is needed ---
+echo "[+] Creating global wrappers in ${WRAP_DIR} ..."
+ENV_PREFIX="${MAMBA_ROOT_PREFIX}/envs/${ENV_NAME}"
+
+make_wrapper () {
+  local name="$1" real_cmd="$2"
+  sudo tee "${WRAP_DIR}/${name}" >/dev/null <<EOF
+#!/usr/bin/env bash
+# Auto-run ${real_cmd} from micromamba env ${ENV_NAME}
+exec micromamba run -p "${ENV_PREFIX}" ${real_cmd} "\$@"
+EOF
+  sudo chmod 0755 "${WRAP_DIR}/${name}"
+}
+
+# Detect which iso command exists inside the env and create sensible aliases.
+HAVE_ISOSEQ3=$(sudo -u "${MAMBA_USER}" micromamba run -p "${ENV_PREFIX}" bash -lc 'command -v isoseq3 >/dev/null && echo yes || true')
+HAVE_ISOSEQ=$(sudo -u "${MAMBA_USER}" micromamba run -p "${ENV_PREFIX}" bash -lc 'command -v isoseq >/dev/null && echo yes || true')
+
+if [[ -n "${HAVE_ISOSEQ3}" ]]; then
+  make_wrapper "isoseq3" "isoseq3"
+  # also provide 'isoseq' alias if not present
+  if [[ -z "${HAVE_ISOSEQ}" ]]; then
+    make_wrapper "isoseq" "isoseq3"
+  fi
+fi
+
+if [[ -n "${HAVE_ISOSEQ}" ]]; then
+  make_wrapper "isoseq" "isoseq"
+  # also provide 'isoseq3' alias if not present
+  if [[ -z "${HAVE_ISOSEQ3}" ]]; then
+    make_wrapper "isoseq3" "isoseq"
+  fi
+fi
+
+# PacBio + samtools wrappers
+for cmd in lima pbmm2 pigeon samtools; do
+  make_wrapper "${cmd}" "${cmd}"
 done
 
-# Also symlink commonly used dependencies
-echo "Linking additional dependencies..."
-for dep in python python3 pip; do
-    if [ -f "$MAMBA_ROOT_PREFIX/bioinfo/bin/$dep" ]; then
-        sudo ln -sf "$MAMBA_ROOT_PREFIX/bioinfo/bin/$dep" /usr/local/bin/$dep
-    fi
-done
+# --- Smoke check (non-fatal) ---
+echo "[+] Verifying versions (non-fatal) ..."
+set +e
+isoseq3 --version 2>/dev/null || isoseq --version 2>/dev/null
+lima --version 2>/dev/null
+pbmm2 --version 2>/dev/null
+pigeon --help 2>/dev/null | head -n1
+samtools --version 2>/dev/null | head -n1
+set -e
 
-# Verify installations
-echo ""
-echo "=========================================="
-echo "Verifying installations..."
-echo "=========================================="
+cat <<MSG
 
-export PATH="/usr/local/bin:$PATH"
+[✓] Done.
 
-echo "isoseq3 version:"
-/usr/local/bin/isoseq3 --version 2>&1 | head -n 1 || echo "isoseq3 check failed"
+You can now run tools directly (no activation needed):
+  isoseq3 --help
+  lima --version
+  pbmm2 --version
+  pigeon --help
+  samtools --version
 
-echo ""
-echo "lima version:"
-/usr/local/bin/lima --version 2>&1 | head -n 1 || echo "lima check failed"
-
-echo ""
-echo "pbmm2 version:"
-/usr/local/bin/pbmm2 --version 2>&1 | head -n 1 || echo "pbmm2 check failed"
-
-echo ""
-echo "pbpigeon version:"
-/usr/local/bin/pbpigeon --version 2>&1 | head -n 1 || echo "pbpigeon check failed"
-
-echo ""
-echo "samtools version:"
-/usr/local/bin/samtools --version 2>&1 | head -n 1 || echo "samtools check failed"
-
-echo ""
-echo "=========================================="
-echo "Setup complete!"
-echo "=========================================="
-echo ""
-echo "All bioinformatics tools are now available system-wide."
-echo "You can run them directly from any terminal:"
-echo "  - isoseq3"
-echo "  - lima"
-echo "  - pbmm2"
-echo "  - pbpigeon"
-echo "  - samtools"
-echo ""
-echo "No environment activation needed!"
-echo "The tools will be automatically available after creating an AMI."
-echo "=========================================="
+(Interactive shells can still:  source /etc/profile && micromamba activate ${ENV_NAME})
+MSG
