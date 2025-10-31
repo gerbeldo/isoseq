@@ -33,10 +33,10 @@ if [ ! -f "${REFERENCE_FASTA}" ]; then
     exit 1
 fi
 
-if [[ "${REFERENCE_FASTA}" == *.gz ]]; then
-    echo "ERROR: Reference FASTA must be uncompressed for pigeon: ${REFERENCE_FASTA}"
-    exit 1
-fi
+# if [[ "${REFERENCE_FASTA}" == *.gz ]]; then
+#     echo "ERROR: Reference FASTA must be uncompressed for pigeon: ${REFERENCE_FASTA}"
+#     exit 1
+# fi
 
 command -v pigeon >/dev/null 2>&1 || { echo "ERROR: pigeon not found in PATH."; exit 1; }
 
