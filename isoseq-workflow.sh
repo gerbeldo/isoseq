@@ -205,7 +205,7 @@ echo "Started at: $(date)"
 
 lima ${HIFI_READS} \
     ${PRIMERS} \
-    ${OUTDIR}/01_primers/${SAMPLE_NAME}.fl.bam
+    ${OUTDIR}/01_primers/${SAMPLE_NAME}.fl.bam \
     --isoseq \
     --dump-clips \
     --peek-guess \
