@@ -115,7 +115,6 @@ decompress_if_gz () {
 
 # Decompress if needed and UPDATE the variables for the rest of the script
 ANNOTATION_GTF="$(decompress_if_gz "${ANNOTATION_GTF}")"
-REFERENCE_GENOME="$(decompress_if_gz "${REFERENCE_GENOME}")"
 
 echo "Using:"
 echo "  GTF:   ${ANNOTATION_GTF}"
