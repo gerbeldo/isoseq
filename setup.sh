@@ -1,105 +1,148 @@
 #!/bin/bash
+set -euo pipefail
 
-# Bioinformatics EC2 Setup Script
-# This script installs micromamba and bioconda packages for PacBio analysis
-# Designed for Ubuntu EC2 instances
+# Bioinformatics Tools Setup for Iso-Seq Analysis
+# This script installs micromamba and required bioinformatics tools on Ubuntu EC2
+# Tools are configured to be available in PATH automatically at startup
 
-set -e  # Exit on any error
-
-echo "=========================================="
-echo "Starting bioinformatics environment setup"
-echo "=========================================="
+echo "Starting bioinformatics environment setup..."
 
 # Update system packages
 echo "Updating system packages..."
-sudo apt-get update
-sudo apt-get upgrade -y
+apt-get update
+apt-get upgrade -y
 
-# Install basic dependencies
+# Install system dependencies required by bioinformatics tools
 echo "Installing system dependencies..."
-sudo apt-get install -y \
+apt-get install -y \
+    wget \
     curl \
-    bzip2 \
-    ca-certificates \
     git \
-    wget
+    build-essential \
+    ca-certificates \
+    libssl-dev \
+    zlib1g-dev \
+    libbz2-dev \
+    liblzma-dev \
+    libncurses5-dev \
+    libffi-dev
 
-# Install micromamba
-echo "Installing micromamba..."
-# The download URL returns a tar.bz2 archive
-# We pipe it directly to tar which extracts the bin/micromamba file
-curl -Ls https://micro.mamba.pm/api/micromamba/linux-64/latest | tar -xvj bin/micromamba
+# Create a dedicated directory for micromamba installation
+MICROMAMBA_DIR="/opt/micromamba"
+MICROMAMBA_ENV_DIR="/opt/micromamba/envs/isoseq"
 
-# Move to a permanent location
-sudo mkdir -p /opt/micromamba
-sudo mv bin/micromamba /opt/micromamba/
-sudo chmod +x /opt/micromamba/micromamba
-rmdir bin  # Clean up the temporary directory
+echo "Installing micromamba to ${MICROMAMBA_DIR}..."
 
-# Initialize micromamba for current user
+# Create directory structure
+mkdir -p "${MICROMAMBA_DIR}"
+mkdir -p "${MICROMAMBA_ENV_DIR}"
+
+# Download and install micromamba
+MICROMAMBA_VERSION=$(curl -s https://api.github.com/repos/mamba-org/micromamba-releases/releases/latest | grep tag_name | cut -d '"' -f 4)
+MICROMAMBA_DOWNLOAD_URL="https://github.com/mamba-org/micromamba-releases/releases/download/${MICROMAMBA_VERSION}/micromamba-linux-64"
+
+echo "Downloading micromamba version ${MICROMAMBA_VERSION}..."
+curl -fsSL "${MICROMAMBA_DOWNLOAD_URL}" -o "${MICROMAMBA_DIR}/micromamba"
+chmod +x "${MICROMAMBA_DIR}/micromamba"
+
 echo "Initializing micromamba..."
-/opt/micromamba/micromamba shell init -s bash --root-prefix ~/micromamba
+"${MICROMAMBA_DIR}/micromamba" shell init -s bash -p "${MICROMAMBA_DIR}" --yes
 
-# Source the shell configuration to make micromamba available
-export MAMBA_ROOT_PREFIX=~/micromamba
-eval "$(/opt/micromamba/micromamba shell hook -s bash)"
-
-# Configure conda channels
-echo "Configuring bioconda channels..."
-micromamba config append channels conda-forge
-micromamba config append channels bioconda
-micromamba config append channels defaults
-micromamba config set channel_priority strict
-
-# Create a base environment with bioinformatics tools
-echo "Creating bioinformatics environment..."
-micromamba create -n bioinfo -y python=3.11 -r ~/micromamba
-
-# Activate the environment
-micromamba activate bioinfo -r ~/micromamba -r ~/micromamba
-
-# Install bioinformatics packages
-echo "Installing bioinformatics tools from bioconda..."
-micromamba install -y \
+# Create isoseq conda environment with required tools
+echo "Creating isoseq conda environment with bioinformatics tools..."
+"${MICROMAMBA_DIR}/micromamba" create \
+    -y \
+    -p "${MICROMAMBA_ENV_DIR}" \
+    -c bioconda \
+    -c conda-forge \
     isoseq3 \
     lima \
     pbmm2 \
     pbpigeon \
-    samtools \
-    -r ~/micromamba
+    samtools
 
-# Verify installations
+# Create activation wrapper script to make tools available in PATH by default
+echo "Setting up automatic activation on shell startup..."
+
+PROFILE_SCRIPT="/etc/profile.d/isoseq-env.sh"
+cat > "${PROFILE_SCRIPT}" << 'EOF'
+# Automatically activate isoseq environment
+if [ -f "/opt/micromamba/etc/profile.d/micromamba.sh" ]; then
+    source "/opt/micromamba/etc/profile.d/micromamba.sh"
+    micromamba activate /opt/micromamba/envs/isoseq
+fi
+EOF
+
+chmod 644 "${PROFILE_SCRIPT}"
+
+# Create bashrc configuration for non-login shells and interactive sessions
+echo "Configuring bashrc for interactive shell sessions..."
+
+BASHRC_CONFIG="/opt/micromamba/bashrc-config.sh"
+cat > "${BASHRC_CONFIG}" << 'EOF'
+# Micromamba and isoseq environment configuration
+if [ -f "/opt/micromamba/etc/profile.d/micromamba.sh" ]; then
+    source "/opt/micromamba/etc/profile.d/micromamba.sh"
+    micromamba activate /opt/micromamba/envs/isoseq
+fi
+EOF
+
+chmod 644 "${BASHRC_CONFIG}"
+
+# Update root's bashrc to source the isoseq environment
+if ! grep -q "isoseq-env" /root/.bashrc; then
+    echo "source ${BASHRC_CONFIG}" >> /root/.bashrc
+fi
+
+# Create a verification script to test installations
+echo "Creating verification script..."
+
+VERIFY_SCRIPT="/usr/local/bin/verify-isoseq-tools"
+cat > "${VERIFY_SCRIPT}" << 'EOF'
+#!/bin/bash
+
+echo "Verifying bioinformatics tools installation..."
 echo ""
-echo "=========================================="
-echo "Verifying installations..."
-echo "=========================================="
 
-micromamba activate bioinfo
+tools=("isoseq3" "lima" "pbmm2" "pbpigeon" "samtools")
+all_ok=true
 
-echo "isoseq3 version:"
-isoseq3 --version 2>&1 | head -n 1 || echo "isoseq3 check failed"
-
-echo "lima version:"
-lima --version 2>&1 | head -n 1 || echo "lima check failed"
-
-echo "pbmm2 version:"
-pbmm2 --version 2>&1 | head -n 1 || echo "pbmm2 check failed"
-
-echo "pbpigeon version:"
-pbpigeon --version 2>&1 | head -n 1 || echo "pbpigeon check failed"
-
-echo "samtools version:"
-samtools --version 2>&1 | head -n 1 || echo "samtools check failed"
+for tool in "${tools[@]}"; do
+    if command -v "${tool}" &> /dev/null; then
+        version=$("${tool}" --version 2>&1 | head -n 1 || echo "version check not available")
+        echo "âœ“ ${tool}: ${version}"
+    else
+        echo "âœ— ${tool}: NOT FOUND"
+        all_ok=false
+    fi
+done
 
 echo ""
-echo "=========================================="
+if [ "$all_ok" = true ]; then
+    echo "All tools are correctly installed!"
+    exit 0
+else
+    echo "Some tools are missing. Please check the installation."
+    exit 1
+fi
+EOF
+
+chmod +x "${VERIFY_SCRIPT}"
+
+# Final verification
+echo ""
+echo "Running final verification..."
+source /opt/micromamba/etc/profile.d/micromamba.sh
+micromamba activate /opt/micromamba/envs/isoseq
+
+"${VERIFY_SCRIPT}"
+
+echo ""
 echo "Setup complete!"
-echo "=========================================="
 echo ""
-echo "To use the bioinformatics tools:"
-echo "1. Start a new shell session or run: source ~/.bashrc"
-echo "2. Activate the environment: micromamba activate bioinfo"
-echo "3. Run your tools: isoseq3, lima, pbmm2, pbpigeon, samtools"
+echo "To use the isoseq environment in new shell sessions, tools will be automatically available."
+echo "If needed, you can manually activate with:"
+echo "  source /opt/micromamba/etc/profile.d/micromamba.sh"
+echo "  micromamba activate /opt/micromamba/envs/isoseq"
 echo ""
-echo "The environment will be automatically available after creating an AMI."
-echo "=========================================="
+echo "To verify installation, run: verify-isoseq-tools"
