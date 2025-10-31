@@ -44,22 +44,23 @@ sudo mkdir -p $MAMBA_ROOT_PREFIX
 
 # Configure conda channels (these commands don't require activation)
 echo "Configuring bioconda channels..."
-sudo /opt/micromamba/bin/micromamba config append channels conda-forge --root-prefix $MAMBA_ROOT_PREFIX
-sudo /opt/micromamba/bin/micromamba config append channels bioconda --root-prefix $MAMBA_ROOT_PREFIX
-sudo /opt/micromamba/bin/micromamba config append channels defaults --root-prefix $MAMBA_ROOT_PREFIX
-sudo /opt/micromamba/bin/micromamba config set channel_priority strict --root-prefix $MAMBA_ROOT_PREFIX
+sudo /opt/micromamba/bin/micromamba --root-prefix $MAMBA_ROOT_PREFIX config append channels conda-forge
+sudo /opt/micromamba/bin/micromamba --root-prefix $MAMBA_ROOT_PREFIX config append channels bioconda
+sudo /opt/micromamba/bin/micromamba --root-prefix $MAMBA_ROOT_PREFIX config append channels defaults
+sudo /opt/micromamba/bin/micromamba --root-prefix $MAMBA_ROOT_PREFIX config set channel_priority strict
 
 # Create a base environment with bioinformatics tools
 echo "Creating base environment with bioinformatics tools..."
 echo "This may take several minutes..."
-sudo /opt/micromamba/bin/micromamba create -n base -y \
+sudo /opt/micromamba/bin/micromamba create \
+    --root-prefix $MAMBA_ROOT_PREFIX \
+    -n base -y \
     python=3.11 \
     isoseq3 \
     lima \
     pbmm2 \
     pbpigeon \
     samtools \
-    --root-prefix $MAMBA_ROOT_PREFIX \
     -c conda-forge \
     -c bioconda \
     -c defaults
