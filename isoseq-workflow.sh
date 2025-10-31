@@ -41,11 +41,11 @@ HIFI_READS="$2"
 ################################################################################
 
 # Reference files (download from GENCODE)
-REFERENCE_GENOME="GRCh38.p14.genome.fa.gz"
-ANNOTATION_GTF="gencode.v49.chr_patch_hapl_scaff.annotation.gtf.gz"
+REFERENCE_GENOME="/home/ubuntu/genomes/GRCh38.p14.genome.fa.gz"
+ANNOTATION_GTF="/home/ubuntu/genomes/gencode.v49.chr_patch_hapl_scaff.annotation.gtf.gz"
 
 # Primer file for Iso-Seq (standard primers)
-PRIMERS="primers.fasta"
+PRIMERS="/home/ubuntu/data/ismb_workshop/primers.fasta"
 
 # Output directory (will create subdirectory for this sample)
 OUTDIR="isoseq_output/${SAMPLE_NAME}"
@@ -84,6 +84,43 @@ if [ ! -f "${ANNOTATION_GTF}" ]; then
     echo "Download from: https://www.gencodegenes.org/human/"
     exit 1
 fi
+
+################################################################################
+# STEP 0: decompress genome files
+################################################################################
+
+
+decompress_if_gz () {
+  local in="$1"
+  [[ -z "${in}" ]] && { echo ""; return 1; }
+
+  # If it ends with .gz (or actually is gzipped), make an uncompressed neighbor
+  if [[ "$in" == *.gz ]] || gzip -t "$in" >/dev/null 2>&1; then
+    local out="${in%.gz}"
+    if [[ ! -e "$out" ]]; then
+      echo "Decompressing '$in' -> '$out'..."
+      if command -v pigz >/dev/null 2>&1; then
+        pigz -dc -- "$in" > "$out"
+      else
+        gzip -dc -- "$in" > "$out"
+      fi
+    else
+      echo "Using existing uncompressed file: $out"
+    fi
+    printf '%s' "$out"
+  else
+    printf '%s' "$in"
+  fi
+}
+
+# Decompress if needed and UPDATE the variables for the rest of the script
+ANNOTATION_GTF="$(decompress_if_gz "${ANNOTATION_GTF}")"
+REFERENCE_GENOME="$(decompress_if_gz "${REFERENCE_GENOME}")"
+
+echo "Using:"
+echo "  GTF:   ${ANNOTATION_GTF}"
+echo "  FASTA: ${REFERENCE_GENOME}"
+echo ""
 
 ################################################################################
 # STEP 0: Setup and Prerequisites
