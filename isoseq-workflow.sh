@@ -213,8 +213,8 @@ lima ${HIFI_READS} \
     --log-level DEBUG \
     --log-file ${OUTDIR}/01_primers/${SAMPLE_NAME}.lima.log
 
-# Get the output BAM file (lima creates primer_5p--primer_3p.bam)
-FL_BAM="${OUTDIR}/01_primers/${SAMPLE_NAME}.fl.primer_5p--primer_3p.bam"
+# Get the output BAM file (lima creates 5p--3p.bam)
+FL_BAM="${OUTDIR}/01_primers/${SAMPLE_NAME}.fl.5p--3p.bam"
 
 if [ ! -f "${FL_BAM}" ]; then
     echo "ERROR: Lima did not produce expected output: ${FL_BAM}"
