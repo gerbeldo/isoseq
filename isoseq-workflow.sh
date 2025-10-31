@@ -40,13 +40,18 @@ HIFI_READS="$2"
 # CONFIGURATION - MODIFY THESE VARIABLES AS NEEDED
 ################################################################################
 
+# Reference assets directory and filenames
+GENOME_DIR="/home/ubuntu/genomes"
+REFERENCE_GENOME_BASENAME="GRCh38.p14.genome.fa"
+ANNOTATION_GTF_BASENAME="gencode.v49.chr_patch_hapl_scaff.annotation.gtf"
+
 # Reference genome files (provide both gzipped and uncompressed paths)
-REFERENCE_GENOME_GZ="/home/ubuntu/genomes/GRCh38.p14.genome.fa.gz"
-REFERENCE_GENOME_FA="/home/ubuntu/genomes/GRCh38.p14.genome.fa"
+REFERENCE_GENOME_GZ="${GENOME_DIR}/${REFERENCE_GENOME_BASENAME}.gz"
+REFERENCE_GENOME_FA="${GENOME_DIR}/${REFERENCE_GENOME_BASENAME}"
 
 # Annotation files (provide both gzipped and uncompressed paths)
-ANNOTATION_GTF_GZ="/home/ubuntu/genomes/gencode.v49.chr_patch_hapl_scaff.annotation.gtf.gz"
-ANNOTATION_GTF="/home/ubuntu/genomes/gencode.v49.chr_patch_hapl_scaff.annotation.gtf"
+ANNOTATION_GTF_GZ="${GENOME_DIR}/${ANNOTATION_GTF_BASENAME}.gz"
+ANNOTATION_GTF="${GENOME_DIR}/${ANNOTATION_GTF_BASENAME}"
 
 # Primer file for Iso-Seq (standard primers)
 PRIMERS="/home/ubuntu/data/ismb_workshop/primers.fasta"
@@ -133,6 +138,7 @@ ANNOTATION_GTF_SORTED="${ANNOTATION_GTF}.sorted.gtf"
 REFERENCE_GENOME_FAI="${REFERENCE_GENOME_FA}.fai"
 
 echo "Using reference assets:"
+echo "  Reference directory:       ${GENOME_DIR}"
 echo "  Annotation (gzipped):      ${ANNOTATION_GTF_GZ}"
 echo "  Annotation (uncompressed): ${ANNOTATION_GTF}"
 echo "  Reference (gzipped):       ${REFERENCE_GENOME_GZ}"
