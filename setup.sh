@@ -46,7 +46,7 @@ curl -fsSL "${MICROMAMBA_DOWNLOAD_URL}" -o "${MICROMAMBA_DIR}/micromamba"
 chmod +x "${MICROMAMBA_DIR}/micromamba"
 
 echo "Initializing micromamba..."
-"${MICROMAMBA_DIR}/micromamba" shell init -s bash -p "${MICROMAMBA_DIR}" --yes
+"${MICROMAMBA_DIR}/micromamba" shell init -s bash -r "${MICROMAMBA_DIR}"
 
 # Create isoseq conda environment with required tools
 echo "Creating isoseq conda environment with bioinformatics tools..."
