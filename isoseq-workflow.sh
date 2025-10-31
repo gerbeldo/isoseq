@@ -45,14 +45,13 @@ GENOME_DIR="/home/ubuntu/genomes"
 REFERENCE_GENOME_BASENAME="GRCh38.p14.genome.fa"
 ANNOTATION_GTF_BASENAME="gencode.v49.primary_assembly.annotation.gtf"
 
-# sorted references
-ANNOTATION_GTF_SORTED="${GENOME_DIR}/gencode.v49.primary_assembly.annotation.gtf"
-REFERENCE_GENOME_FAI="${REFERENCE_GENOME_FA}.fai"
-
-
 # Reference genome files (provide both gzipped and uncompressed paths)
 REFERENCE_GENOME_GZ="${GENOME_DIR}/${REFERENCE_GENOME_BASENAME}.gz"
 REFERENCE_GENOME_FA="${GENOME_DIR}/${REFERENCE_GENOME_BASENAME}"
+
+# sorted references
+ANNOTATION_GTF_SORTED="${GENOME_DIR}/gencode.v49.primary_assembly.annotation.gtf"
+REFERENCE_GENOME_FAI="${REFERENCE_GENOME_FA}.fai"
 
 # Annotation files (provide both gzipped and uncompressed paths)
 ANNOTATION_GTF_GZ="${GENOME_DIR}/${ANNOTATION_GTF_BASENAME}.gz"
