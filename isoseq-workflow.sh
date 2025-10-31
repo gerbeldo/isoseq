@@ -43,14 +43,14 @@ HIFI_READS="$2"
 # Reference assets directory and filenames
 GENOME_DIR="/home/ubuntu/genomes"
 REFERENCE_GENOME_BASENAME="GRCh38.p14.genome.fa"
-ANNOTATION_GTF_BASENAME="gencode.v49.primary_assembly.annotation.gtf"
+ANNOTATION_GTF_BASENAME="gencode.v48.primary_assembly.annotation.gtf"
 
 # Reference genome files (provide both gzipped and uncompressed paths)
 REFERENCE_GENOME_GZ="${GENOME_DIR}/${REFERENCE_GENOME_BASENAME}.gz"
 REFERENCE_GENOME_FA="${GENOME_DIR}/${REFERENCE_GENOME_BASENAME}"
 
 # sorted references
-ANNOTATION_GTF_SORTED="${GENOME_DIR}/gencode.v49.primary_assembly.annotation.sorted.gtf"
+ANNOTATION_GTF_SORTED="${GENOME_DIR}/gencode.v48.primary_assembly.annotation.sorted.gtf"
 REFERENCE_GENOME_FAI="${REFERENCE_GENOME_FA}.fai"
 
 # Annotation files (provide both gzipped and uncompressed paths)
@@ -272,6 +272,7 @@ echo "Started at: $(date)"
 isoseq cluster2 ${FLNC_BAM} \
     ${OUTDIR}/03_cluster/${SAMPLE_NAME}.clustered.bam \
     --num-threads ${THREADS} \
+    --use-qvs \
     --log-level INFO
 
 CLUSTERED_BAM="${OUTDIR}/03_cluster/${SAMPLE_NAME}.clustered.bam"
