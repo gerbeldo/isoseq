@@ -40,9 +40,13 @@ HIFI_READS="$2"
 # CONFIGURATION - MODIFY THESE VARIABLES AS NEEDED
 ################################################################################
 
-# Reference files (download from GENCODE)
-REFERENCE_GENOME="/home/ubuntu/genomes/GRCh38.p14.genome.fa.gz"
-ANNOTATION_GTF="/home/ubuntu/genomes/gencode.v49.chr_patch_hapl_scaff.annotation.gtf.gz"
+# Reference genome files (provide both gzipped and uncompressed paths)
+REFERENCE_GENOME_GZ="/home/ubuntu/genomes/GRCh38.p14.genome.fa.gz"
+REFERENCE_GENOME_FA="/home/ubuntu/genomes/GRCh38.p14.genome.fa"
+
+# Annotation files (provide both gzipped and uncompressed paths)
+ANNOTATION_GTF_GZ="/home/ubuntu/genomes/gencode.v49.chr_patch_hapl_scaff.annotation.gtf.gz"
+ANNOTATION_GTF="/home/ubuntu/genomes/gencode.v49.chr_patch_hapl_scaff.annotation.gtf"
 
 # Primer file for Iso-Seq (standard primers)
 PRIMERS="/home/ubuntu/data/ismb_workshop/primers.fasta"
@@ -52,6 +56,10 @@ OUTDIR="isoseq_output/${SAMPLE_NAME}"
 
 # Thread/CPU settings
 THREADS=16
+
+# Prerequisite:
+#   Run ./prepare-reference.sh "${ANNOTATION_GTF}" "${REFERENCE_GENOME_FA}" once
+#   before executing this workflow so pigeon indexes are available.
 
 # Log file
 LOGFILE="${OUTDIR}/${SAMPLE_NAME}_pipeline.log"
@@ -73,52 +81,62 @@ if [ ! -f "${HIFI_READS}" ]; then
 fi
 
 # Check if reference files exist
-if [ ! -f "${REFERENCE_GENOME}" ]; then
-    echo "ERROR: Reference genome not found: ${REFERENCE_GENOME}"
+if [ ! -f "${REFERENCE_GENOME_GZ}" ]; then
+    echo "ERROR: gzipped reference genome not found: ${REFERENCE_GENOME_GZ}"
     echo "Download from: https://www.gencodegenes.org/human/"
+    exit 1
+fi
+
+if [[ "${REFERENCE_GENOME_GZ}" != *.gz ]]; then
+    echo "ERROR: REFERENCE_GENOME_GZ must point to a .gz file: ${REFERENCE_GENOME_GZ}"
+    exit 1
+fi
+
+if [ ! -f "${REFERENCE_GENOME_FA}" ]; then
+    echo "ERROR: uncompressed reference genome not found: ${REFERENCE_GENOME_FA}"
+    echo "Download from: https://www.gencodegenes.org/human/"
+    exit 1
+fi
+
+if [[ "${REFERENCE_GENOME_FA}" == *.gz ]]; then
+    echo "ERROR: REFERENCE_GENOME_FA must point to an uncompressed FASTA: ${REFERENCE_GENOME_FA}"
+    exit 1
+fi
+
+if [ ! -f "${ANNOTATION_GTF_GZ}" ]; then
+    echo "ERROR: gzipped annotation GTF not found: ${ANNOTATION_GTF_GZ}"
+    echo "Download from: https://www.gencodegenes.org/human/"
+    exit 1
+fi
+
+if [[ "${ANNOTATION_GTF_GZ}" != *.gz ]]; then
+    echo "ERROR: ANNOTATION_GTF_GZ must point to a .gz file: ${ANNOTATION_GTF_GZ}"
     exit 1
 fi
 
 if [ ! -f "${ANNOTATION_GTF}" ]; then
-    echo "ERROR: Annotation GTF not found: ${ANNOTATION_GTF}"
+    echo "ERROR: uncompressed annotation GTF not found: ${ANNOTATION_GTF}"
     echo "Download from: https://www.gencodegenes.org/human/"
     exit 1
 fi
 
+if [[ "${ANNOTATION_GTF}" == *.gz ]]; then
+    echo "ERROR: ANNOTATION_GTF must point to an uncompressed GTF: ${ANNOTATION_GTF}"
+    exit 1
+fi
+
 ################################################################################
-# STEP 0: decompress genome files
+# STEP 0: Reference path setup
 ################################################################################
 
+ANNOTATION_GTF_SORTED="${ANNOTATION_GTF}.sorted.gtf"
+REFERENCE_GENOME_FAI="${REFERENCE_GENOME_FA}.fai"
 
-decompress_if_gz () {
-  local in="$1"
-  [[ -z "${in}" ]] && { echo ""; return 1; }
-
-  # If it ends with .gz (or actually is gzipped), make an uncompressed neighbor
-  if [[ "$in" == *.gz ]] || gzip -t "$in" >/dev/null 2>&1; then
-    local out="${in%.gz}"
-    if [[ ! -e "$out" ]]; then
-      echo "Decompressing '$in' -> '$out'..."
-      if command -v pigz >/dev/null 2>&1; then
-        pigz -dc -- "$in" > "$out"
-      else
-        gzip -dc -- "$in" > "$out"
-      fi
-    else
-      echo "Using existing uncompressed file: $out"
-    fi
-    printf '%s' "$out"
-  else
-    printf '%s' "$in"
-  fi
-}
-
-# Decompress if needed and UPDATE the variables for the rest of the script
-ANNOTATION_GTF="$(decompress_if_gz "${ANNOTATION_GTF}")"
-
-echo "Using:"
-echo "  GTF:   ${ANNOTATION_GTF}"
-echo "  FASTA: ${REFERENCE_GENOME}"
+echo "Using reference assets:"
+echo "  Annotation (gzipped):      ${ANNOTATION_GTF_GZ}"
+echo "  Annotation (uncompressed): ${ANNOTATION_GTF}"
+echo "  Reference (gzipped):       ${REFERENCE_GENOME_GZ}"
+echo "  Reference (uncompressed):  ${REFERENCE_GENOME_FA}"
 echo ""
 
 ################################################################################
@@ -138,8 +156,10 @@ exec 2>&1
 echo "Sample name: ${SAMPLE_NAME}"
 echo "Input file: ${HIFI_READS}"
 echo "Output directory: ${OUTDIR}"
-echo "Reference genome: ${REFERENCE_GENOME}"
-echo "Annotation GTF: ${ANNOTATION_GTF}"
+echo "Reference genome (pbmm2): ${REFERENCE_GENOME_GZ}"
+echo "Reference genome (pigeon): ${REFERENCE_GENOME_FA}"
+echo "Annotation GTF (gzipped): ${ANNOTATION_GTF_GZ}"
+echo "Annotation GTF (pigeon): ${ANNOTATION_GTF}"
 echo "Threads: ${THREADS}"
 echo ""
 
@@ -253,7 +273,7 @@ echo "Step 4: Mapping transcripts to reference genome with pbmm2"
 echo "==================================================================="
 echo "Started at: $(date)"
 
-pbmm2 align ${REFERENCE_GENOME} ${CLUSTERED_BAM} \
+pbmm2 align ${REFERENCE_GENOME_GZ} ${CLUSTERED_BAM} \
     ${OUTDIR}/04_mapping/${SAMPLE_NAME}.mapped.bam \
     --preset ISOSEQ \
     --sort \
@@ -299,22 +319,20 @@ echo "Collapse completed at: $(date)"
 echo ""
 
 ################################################################################
-# STEP 6: Prepare reference files for pigeon (only if not already done)
+# STEP 6: Verify prepared reference files
 ################################################################################
 
 echo "==================================================================="
-echo "Step 6: Preparing reference files for pigeon"
+echo "Step 6: Verifying prepared reference files for pigeon"
 echo "==================================================================="
 
-# Check if reference files are already prepared
-if [ ! -f "${ANNOTATION_GTF}.sorted.gtf" ] || [ ! -f "${REFERENCE_GENOME}.fai" ]; then
-    echo "Preparing reference files (this only needs to be done once)..."
-    REFERENCE_GENOME="$(decompress_if_gz "${REFERENCE_GENOME}")"
-    pigeon prepare ${ANNOTATION_GTF} ${REFERENCE_GENOME}
-    echo "Reference preparation completed."
-else
-    echo "Reference files already prepared. Skipping."
+if [ ! -f "${ANNOTATION_GTF_SORTED}" ] || [ ! -f "${REFERENCE_GENOME_FAI}" ]; then
+    echo "ERROR: Prepared reference files not found."
+    echo "Run ./prepare-reference.sh \"${ANNOTATION_GTF}\" \"${REFERENCE_GENOME_FA}\" before executing this workflow."
+    exit 1
 fi
+
+echo "Reference files verified."
 echo ""
 
 ################################################################################
@@ -347,7 +365,7 @@ echo "Step 8: Classifying transcripts with pigeon"
 echo "==================================================================="
 echo "Started at: $(date)"
 
-pigeon classify ${SORTED_GFF} ${ANNOTATION_GTF} ${REFERENCE_GENOME} \
+pigeon classify ${SORTED_GFF} ${ANNOTATION_GTF_SORTED} ${REFERENCE_GENOME_FA} \
     --flnc ${OUTDIR}/05_collapse/${SAMPLE_NAME}.collapsed.flnc_count.txt \
     --log-level INFO \
     --output ${OUTDIR}/06_classification/${SAMPLE_NAME}
