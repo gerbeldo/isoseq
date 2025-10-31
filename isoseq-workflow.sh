@@ -62,6 +62,8 @@ PRIMERS="/home/ubuntu/data/ismb_workshop/primers.fasta"
 
 # Output directory (will create subdirectory for this sample)
 OUTDIR="isoseq_output/${SAMPLE_NAME}"
+mkdir -p "${OUTDIR}"
+OUTDIR="$(cd "${OUTDIR}" && pwd)"
 
 # Thread/CPU settings
 THREADS=16
@@ -291,14 +293,15 @@ echo "Step 4: Mapping transcripts to reference genome with pbmm2"
 echo "==================================================================="
 echo "Started at: $(date)"
 
+MAPPED_BAM="${OUTDIR}/04_mapping/${SAMPLE_NAME}.mapped.bam"
+mkdir -p "$(dirname "${MAPPED_BAM}")"
+
 pbmm2 align ${REFERENCE_GENOME_GZ} ${CLUSTERED_BAM} \
-    ${OUTDIR}/04_mapping/${SAMPLE_NAME}.mapped.bam \
+    ${MAPPED_BAM} \
     --preset ISOSEQ \
     --sort \
     -j ${THREADS} \
     --log-level INFO
-
-MAPPED_BAM="${OUTDIR}/04_mapping/${SAMPLE_NAME}.mapped.bam"
 
 if [ ! -f "${MAPPED_BAM}" ]; then
     echo "ERROR: pbmm2 did not produce expected output: ${MAPPED_BAM}"
