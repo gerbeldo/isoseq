@@ -29,7 +29,7 @@ echo "  threads: ${THREADS}"
 
 pbmm2 align "${REFERENCE_GENOME_GZ}" "${FL_BAM}" \
     "${MAPPED_BAM}" \
-    --preset ISOSEQ \
+    --preset HiFi \
     --sort \
     -j "${THREADS}" \
     --log-level INFO
