@@ -32,7 +32,7 @@ echo "Output directory: $OUTDIR"
 echo "S3 sync target: ${S3_TARGET}"
 echo "==================================================================="
 
-longcallr \
+longcallR \
     -b "${MAPPED_BAM_FILE}" \
     -f "${GENOME_REFERENCE}" \
     -p hifi-isoseq \
