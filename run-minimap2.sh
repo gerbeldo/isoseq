@@ -34,7 +34,7 @@ mkdir -p "${OUT_DIR}"
 
 BAM_OUT="${OUT_DIR}/${SAMPLE_NAME}_aligned.bam"
 UNMAPPED_BAM="${OUT_DIR}/${SAMPLE_NAME}_unmapped.bam"
-LOG_FILE="${OUT_DIR}/${SAMPLE_NAME}_alignment.log"
+LOG_FILE="/home/ubuntu/isoseq.log"
 
 echo "Starting alignment for sample: ${SAMPLE_NAME}" | tee -a "${LOG_FILE}"
 echo "Input FASTA: ${FASTA_PATH}" | tee -a "${LOG_FILE}"
