@@ -60,10 +60,10 @@ echo "Running minimap2 alignment..." | tee -a "${LOG_FILE}"
 
 minimap2 \
     -ax splice:hq \
-    -t 8 \
-    -G 500k \
-    -p 0.5 \
-    -N 10 \
+    -t $(nproc) \
+    -G 200k \
+    -p 0.8 \
+    -N 5 \
     --cs=long \
     --eqx \
     -Y \
