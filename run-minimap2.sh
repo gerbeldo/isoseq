@@ -47,9 +47,6 @@ echo "S3 output path: ${S3_OUTPUT_PATH}" | tee -a "${LOG_FILE}"
 # Parameters explained:
 # -ax splice:hq    : Preset for high-quality long-read spliced alignment (for Complete Genomics data)
 # -t 8             : Number of threads (adjust based on your system)
-# -G 500k          : Maximum intron length (500kb; default is 200k)
-# -p 0.5           : Minimum secondary-to-primary score ratio (default 0.8; 0.5 is more permissive)
-# -N 10            : Retain at most 10 secondary alignments (default is 5)
 # --cs=long        : Include long-format cs tag for detailed alignment information
 # -a               : Output in SAM format (includes unmapped reads)
 # -Y               : Use soft clipping for supplementary alignments
@@ -59,11 +56,8 @@ echo "S3 output path: ${S3_OUTPUT_PATH}" | tee -a "${LOG_FILE}"
 echo "Running minimap2 alignment..." | tee -a "${LOG_FILE}"
 
 minimap2 \
-    -ax splice:hq \
+    -ax splice \
     -t $(nproc) \
-    -G 200k \
-    -p 0.8 \
-    -N 5 \
     --cs=long \
     --eqx \
     -Y \
