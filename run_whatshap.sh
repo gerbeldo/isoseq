@@ -49,6 +49,20 @@ tabix -p vcf "${OUTPUT_PREFIX}.vcf.gz"
 echo "output phasing stats..."
 whatshap stats "${OUTPUT_PREFIX}.vcf.gz" > "${OUTPUT_PREFIX}_stats.txt"
 
+echo "add haplotype tag to visualize in IGV..."
+whatshap haplotag \
+    -o "${OUTPUT_PREFIX}_haplotagged.bam" \
+    --reference "$REFERENCE" \
+    --output-threads "$THREADS" \
+    --regions "$REGION" \
+    "${OUTPUT_PREFIX}.vcf.gz" \
+    "$INPUT_CRAM"
+
+# index
+echo "Indexing haplotagged BAM..."
+samtools index -@ "$THREADS" "${OUTPUT_PREFIX}_haplotagged.bam"
+
+
 # print
 echo ""
 echo "=== Phasing Statistics ==="
@@ -59,6 +73,8 @@ echo "=== Complete! ==="
 echo "Output files:"
 echo "  - Phased VCF: ${OUTPUT_PREFIX}.vcf.gz"
 echo "  - Statistics: ${OUTPUT_PREFIX}_stats.txt"
+echo "  - Haplotagged BAM: ${OUTPUT_PREFIX}_haplotagged.bam"
+echo "  - Haplotagged BAM index: ${OUTPUT_PREFIX}_haplotagged.bam.bai"
 echo ""
 echo "To inspect variants:"
 echo "  zcat ${OUTPUT_PREFIX}.vcf.gz | grep -v '^##'"
