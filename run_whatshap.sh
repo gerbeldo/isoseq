@@ -1,8 +1,8 @@
 #!/bin/bash
 set -euo pipefail
 
-# Usage: ./run_whatshap.sh <input.vcf> <sample.cram> <reference.fasta> <region>
-# Example: ./run_whatshap.sh variants.vcf sample.cram hg19.fasta "chr17:43044295-43170245"
+# usage: ./run_whatshap.sh <input.vcf> <sample.cram> <reference.fasta> <region>
+# example: ./run_whatshap.sh variants.vcf sample.cram hg19.fasta "chr17:43044295-43170245"
 
 if [ "$#" -ne 4 ]; then
     echo "Usage: $0 <input.vcf> <sample.cram> <reference.fasta> <region>"
