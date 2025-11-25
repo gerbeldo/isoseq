@@ -160,6 +160,7 @@ echo "==================================================================="
 
 mkdir -p ${OUTDIR}/{03_cluster,04_mapping,05_collapse,06_classification}
 
+# use a nice tmp directory, to not pollute results
 TMP_BASE="${OUTDIR}/tmp"
 mkdir -p "${TMP_BASE}"
 case "${TMP_BASE}" in
